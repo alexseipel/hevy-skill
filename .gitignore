@@ -1,0 +1,14 @@
+# Local machine settings, not shared. The skills under .claude/skills are
+# symlinks into skills/ and are committed.
+.claude/settings.local.json
+
+__pycache__/
+*.py[cod]
+
+node_modules/
+.env
+.env.*
+!.env.example
+
+.DS_Store
+*.log

@@ -1,0 +1,39 @@
+{
+  "name": "hevy-skill",
+  "owner": {
+    "name": "Alexander Seipel",
+    "url": "https://github.com/alexseipel"
+  },
+  "metadata": {
+    "description": "Agent skill for the Hevy training API",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "hevy",
+      "description": "Full coverage of the Hevy REST API: workouts, routines, routine folders, exercise templates, exercise history, body measurements and user info, verified against the live API.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Alexander Seipel",
+        "url": "https://github.com/alexseipel"
+      },
+      "homepage": "https://github.com/alexseipel/hevy-skill",
+      "repository": "https://github.com/alexseipel/hevy-skill",
+      "license": "MIT",
+      "keywords": [
+        "hevy",
+        "fitness",
+        "workout",
+        "training",
+        "rest-api",
+        "openapi"
+      ],
+      "category": "productivity",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/hevy-api"
+      ]
+    }
+  ]
+}

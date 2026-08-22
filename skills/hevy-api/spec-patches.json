@@ -1,0 +1,160 @@
+{
+  "_comment": "Corrections applied to Hevy's published OpenAPI document. Each patch asserts what it expects to find, so a patch that stops matching means upstream changed and the correction needs re-checking rather than silently reapplying. See reference/observed.md for how each was verified.",
+  "upstream": "https://api.hevyapp.com/docs/swagger-ui-init.js",
+  "verified_at": "2026-08-22",
+  "patches": [
+    {
+      "id": "add-servers",
+      "why": "The document declares no server, so a generated client has no base URL. Verified by calling the paths against this origin.",
+      "op": "add",
+      "pointer": "/servers",
+      "value": [
+        {
+          "url": "https://api.hevyapp.com",
+          "description": "Production"
+        }
+      ]
+    },
+    {
+      "id": "add-security-scheme",
+      "why": "securitySchemes is empty and every operation repeats api-key as a plain header parameter. Declaring the scheme once is what lets a generated client handle auth as auth.",
+      "op": "add",
+      "pointer": "/components/securitySchemes",
+      "value": {
+        "ApiKey": {
+          "type": "apiKey",
+          "in": "header",
+          "name": "api-key",
+          "description": "Issued at https://hevy.com/settings?developer. Hevy Pro only."
+        }
+      }
+    },
+    {
+      "id": "add-global-security",
+      "why": "Every route requires the key, so the requirement belongs at the document level.",
+      "op": "add",
+      "pointer": "/security",
+      "value": [
+        {
+          "ApiKey": []
+        }
+      ]
+    },
+    {
+      "id": "drop-api-key-parameter",
+      "why": "With the security scheme declared, the per-operation api-key header parameter would make a generated client ask for the key twice.",
+      "op": "drop-parameter",
+      "parameter": "api-key",
+      "expect_count": 22
+    },
+    {
+      "id": "superset-field-exercise",
+      "why": "The live API returns superset_id, matching the request field. The spec's supersets_id names a field the API never sends.",
+      "op": "rename-key",
+      "pointer": "/components/schemas/Exercise/properties",
+      "from": "supersets_id",
+      "to": "superset_id"
+    },
+    {
+      "id": "superset-field-workout",
+      "why": "Same correction in the Workout schema's inline exercise object.",
+      "op": "rename-key",
+      "pointer": "/components/schemas/Workout/properties/exercises/items/properties",
+      "from": "supersets_id",
+      "to": "superset_id"
+    },
+    {
+      "id": "superset-field-routine",
+      "why": "Same correction in the Routine schema's inline exercise object.",
+      "op": "rename-key",
+      "pointer": "/components/schemas/Routine/properties/exercises/items/properties",
+      "from": "supersets_id",
+      "to": "superset_id"
+    },
+    {
+      "id": "rest-seconds-type",
+      "why": "Typed as a string while the spec's own example is 60. The API sends an integer.",
+      "op": "replace",
+      "pointer": "/components/schemas/Routine/properties/exercises/items/properties/rest_seconds/type",
+      "from": "string",
+      "to": "integer"
+    },
+    {
+      "id": "equipment-field-name",
+      "why": "Reading a template gives equipment. Only the create request uses equipment_category, and that one is left alone.",
+      "op": "rename-key",
+      "pointer": "/components/schemas/ExerciseTemplate/properties",
+      "from": "equipment_category",
+      "to": "equipment"
+    },
+    {
+      "id": "routine-id-nullable",
+      "why": "A workout logged without a routine returns routine_id: null.",
+      "op": "merge",
+      "pointer": "/components/schemas/Workout/properties/routine_id",
+      "value": {
+        "nullable": true
+      }
+    },
+    {
+      "id": "measurement-id",
+      "why": "Every body measurement carries an integer id the spec omits. It is not accepted on write.",
+      "op": "add",
+      "pointer": "/components/schemas/BodyMeasurement/properties/id",
+      "value": {
+        "type": "integer",
+        "readOnly": true,
+        "description": "Server-assigned id. Absent from the spec, and rejected by PUT.",
+        "example": 10000001
+      }
+    },
+    {
+      "id": "measurement-created-at",
+      "why": "Returned alongside id, and equally undocumented.",
+      "op": "add",
+      "pointer": "/components/schemas/BodyMeasurement/properties/created_at",
+      "value": {
+        "type": "string",
+        "readOnly": true,
+        "description": "ISO 8601 timestamp with milliseconds.",
+        "example": "2024-08-14T11:59:31.028Z"
+      }
+    },
+    {
+      "id": "page-size-default-workouts",
+      "why": "The observed default is the route's cap, not 5.",
+      "op": "set-parameter-default",
+      "route": "/v1/workouts",
+      "method": "get",
+      "parameter": "pageSize",
+      "from": 5,
+      "to": 10
+    },
+    {
+      "id": "page-size-default-routines",
+      "why": "The observed default is the route's cap, not 5.",
+      "op": "set-parameter-default",
+      "route": "/v1/routines",
+      "method": "get",
+      "parameter": "pageSize",
+      "from": 5,
+      "to": 10
+    },
+    {
+      "id": "page-size-default-templates",
+      "why": "The observed default is the route's cap, not 5.",
+      "op": "set-parameter-default",
+      "route": "/v1/exercise_templates",
+      "method": "get",
+      "parameter": "pageSize",
+      "from": 5,
+      "to": 100
+    }
+  ],
+  "page_not_found_routes": [
+    "/v1/workouts",
+    "/v1/routines",
+    "/v1/routine_folders",
+    "/v1/exercise_templates"
+  ]
+}

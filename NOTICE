@@ -1,0 +1,24 @@
+This repository contains material that is not covered by its MIT licence.
+
+Hevy's OpenAPI document
+-----------------------
+    skills/hevy-api/openapi.json
+    skills/hevy-api/openapi.corrected.json
+
+`openapi.json` is Hevy's own OpenAPI document, published at
+https://api.hevyapp.com/docs and redistributed here unmodified so that the
+corrections in `spec-patches.json` have a fixed reference to be checked
+against. `openapi.corrected.json` is generated from it.
+
+Copyright in that document, including its descriptions and examples, belongs
+to Hevy. Hevy attaches no licence to it. Both files are included for
+interoperability, and the MIT grant in LICENSE does not extend to them or to
+the Hevy name.
+
+Everything else in this repository is original work under the MIT licence:
+the skills, the reference documentation, the client, the checks, and the
+corrections themselves.
+
+Prose in the documentation restates facts from Hevy's document in different
+words and cites it. No description or example from it is reproduced verbatim
+in any Markdown file here.

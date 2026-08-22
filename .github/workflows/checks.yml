@@ -1,0 +1,45 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, so a change to Hevy's spec surfaces as a failing job rather than
+    # as a wrong answer in somebody's editor.
+    - cron: "17 6 * * 1"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate skill layout, frontmatter, links and secrets
+        run: python3 scripts/validate_skill.py
+      - name: Check every API operation is covered
+        run: python3 scripts/check_coverage.py
+      - name: Check the corrected spec matches its patches
+        run: python3 scripts/build_corrected_spec.py --check
+
+  upstream-drift:
+    # Scheduled only: it reaches the network, so it must not gate a pull request.
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Re-pin upstream and re-apply every correction
+        run: python3 scripts/build_corrected_spec.py --fetch
+      - name: Report what moved
+        run: |
+          if ! git diff --quiet; then
+            echo "::warning::Hevy's OpenAPI document changed. Review the diff."
+            git diff --stat
+            exit 1
+          fi
+          echo "Upstream unchanged."
