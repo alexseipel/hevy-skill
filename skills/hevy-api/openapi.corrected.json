@@ -2,9 +2,9 @@
   "openapi": "3.0.0",
   "info": {
     "title": "Hevy API Docs",
-    "description": "\n      Welcome to Hevy's public API! We're just starting to roll this out and depending on your\n      feedback, we'll be adding more features and endpoints. Also, we make no guarantees that \n      we won't completely change the structure or abandon the project entirely so use it at\n      your own risk. Currently, this API is only available to Hevy Pro users. You can get your \n      key on our web app at https://hevy.com/settings?developer. If you have any questions,\n      please reach out to pavel@hevyapp.com \ud83e\udd1d.\n\n      CORRECTED COPY. 15 corrections verified against the live API on 2026-08-22, plus 404 responses on 4 list routes. The upstream document is openapi.json, and the corrections are listed in spec-patches.json and reference/observed.md.\n      ",
+    "description": "\n      Welcome to Hevy's public API! We're just starting to roll this out and depending on your\n      feedback, we'll be adding more features and endpoints. Also, we make no guarantees that \n      we won't completely change the structure or abandon the project entirely so use it at\n      your own risk. Currently, this API is only available to Hevy Pro users. You can get your \n      key on our web app at https://hevy.com/settings?developer. If you have any questions,\n      please reach out to pavel@hevyapp.com \ud83e\udd1d.\n\n      CORRECTED COPY. 17 corrections verified against the live API on 2026-08-23, plus 404 responses on 5 list routes. The upstream document is openapi.json, and the corrections are listed in spec-patches.json and reference/observed.md.\n      ",
     "version": "0.0.1",
-    "x-corrections-verified-at": "2026-08-22",
+    "x-corrections-verified-at": "2026-08-23",
     "x-corrections-source": "spec-patches.json",
     "x-upstream": {
       "source": "https://api.hevyapp.com/docs",
@@ -168,7 +168,7 @@
             "name": "pageSize",
             "schema": {
               "type": "integer",
-              "default": 5
+              "default": 10
             },
             "description": "Number of items on the requested page (Max 10)"
           },
@@ -176,8 +176,7 @@
             "in": "query",
             "name": "since",
             "schema": {
-              "type": "string",
-              "default": "1970-01-01T00:00:00Z"
+              "type": "string"
             }
           }
         ],
@@ -195,6 +194,9 @@
           },
           "500": {
             "description": "Internal Server Error"
+          },
+          "404": {
+            "description": "Page number past the last page"
           }
         }
       }

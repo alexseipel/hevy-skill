@@ -7,8 +7,8 @@ Three questions, one per column of the report:
   client  does scripts/hevy.py issue a request against this path?
   cli     does a subcommand of hevy.py declare this operation in its help?
 
-The cli column reads the real argparse tree rather than grepping the source,
-so a command renamed without its help text still fails the check.
+The cli column reads the parser's own --help rendering rather than grepping
+the source, so a command renamed without its help text still fails the check.
 
 Exits non-zero when any operation misses any column, so CI fails on a gap
 instead of shipping a coverage claim nobody checked.
@@ -16,9 +16,9 @@ instead of shipping a coverage claim nobody checked.
 
 from __future__ import annotations
 
-import argparse
 import importlib.util
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -65,12 +65,14 @@ def load_client() -> object:
         sys.dont_write_bytecode = previous
 
 
-def subcommand_help(parser: argparse.ArgumentParser) -> list[str]:
-    """Every subcommand's help string, read from the parser itself."""
-    for action in parser._actions:
-        if isinstance(action, argparse._SubParsersAction):
-            return [choice.help for choice in action._choices_actions]
-    return []
+def cli_help_text() -> str:
+    """The parser's own --help rendering, with every subcommand's help line.
+
+    format_help() wraps at the terminal width, and a wrapped path would slip
+    past the coverage regex, so COLUMNS is pinned wide for the call.
+    """
+    os.environ["COLUMNS"] = "400"
+    return load_client().build_parser().format_help()
 
 
 def main() -> int:
@@ -80,7 +82,7 @@ def main() -> int:
     ops = operations(json.loads(SPEC.read_text()))
     docs = "\n".join(p.read_text() for p in sorted(SKILL_DIR.rglob("*.md")))
     source = CLIENT.read_text()
-    helps = "\n".join(h or "" for h in subcommand_help(load_client().build_parser()))
+    helps = cli_help_text()
 
     rows, failures = [], 0
     for method, path in ops:

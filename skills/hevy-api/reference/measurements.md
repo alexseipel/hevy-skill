@@ -30,7 +30,7 @@ recorded is left out rather than sent as `null`
 ([observed.md](observed.md)).
 
 A page past the end returns `404` here, and on every other list route too,
-whatever their spec entries document.
+whatever their spec entries document ([observed.md](observed.md)).
 
 ## POST /v1/body_measurements
 

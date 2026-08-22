@@ -1,8 +1,8 @@
 # Where the spec is wrong
 
 The published [openapi.json](../openapi.json) disagrees with the live API in
-nine places. Every row below was checked against a real account on
-**2026-08-22** with `scripts/verify_live.py`, and the rest of this skill
+ten places. Every row below was checked against a real account on
+**2026-08-23** with `scripts/verify_live.py`, and the rest of this skill
 documents the observed column rather than the spec column.
 
 Re-run the check before trusting a row:
@@ -28,6 +28,7 @@ neither where to send a request nor how to authenticate it.
 | 7 | `BodyMeasurement` | `date` plus measurement fields | adds **`id`** and **`created_at`**, and omits null fields |
 | 8 | `Workout.routine_id` | `string` | **nullable**, `null` for an unplanned workout |
 | 9 | Timestamp format | `2021-09-14T12:00:00Z` everywhere | **two formats**, see below |
+| 10 | `GET /v1/workouts/events` | `since` defaults to the epoch | **omitting `since` returns no events at all** |
 
 ## 1. The superset field is not renamed
 
@@ -65,7 +66,7 @@ different, and only when reading: creating a custom exercise still sends
 | `/v1/exercise_templates` | 5 | **100** | 100 |
 | `/v1/routine_folders` | 5 | 5 | 10 |
 | `/v1/body_measurements` | 10 | 10 | 10 |
-| `/v1/workouts/events` | 5 | not measured | 10 |
+| `/v1/workouts/events` | 5 | **10** | 10 |
 
 Send `pageSize` explicitly rather than relying on either number.
 
@@ -74,6 +75,7 @@ Send `pageSize` explicitly rather than relying on either number.
 `page=0` returns `200` with page 1, and the response echoes `"page": 1`.
 `page=-1` returns `400`. A page past the last one returns `404` on every list
 route, including the ones whose spec entry documents only `400`.
+`verify_live.py` re-checks the `404` on all six.
 
 `pageSize=0` returns `200`. `pageSize` above the cap returns `400` with a
 usable message:
@@ -99,6 +101,12 @@ recorded is **absent**, not `null`, so code that reads
 Note the float: `80.50000000000045` is stored as a binary float, so round for
 display rather than assuming the value you sent comes back unchanged.
 
+## 8. `routine_id` is nullable
+
+A workout logged without a routine comes back with `routine_id: null`. The
+spec types the field as a plain `string`, and the corrected spec adds
+`nullable: true`.
+
 ## 9. Two timestamp formats in one object
 
 | Field | Format | Example |
@@ -108,6 +116,19 @@ display rather than assuming the value you sent comes back unchanged.
 
 Both are valid ISO 8601, and a strict parser written against one rejects the
 other. Use a parser that accepts both.
+
+## 10. Omitting `since` is not an epoch backfill
+
+The spec gives `since` a default of `1970-01-01T00:00:00Z`, which reads as
+"omitting it returns everything". It does not. On an account whose epoch
+backfill spans many pages, a call without `since` returned `page_count: 1` and
+zero events.
+
+Whether the server substitutes a recent timestamp or the filter matches
+nothing was not determined, and telling the two apart needs a write. What is
+certain is that the epoch default in the spec does not hold, so send `since`
+explicitly on every call. The corrected spec drops the false value rather than
+replacing it.
 
 ## Ordering, which the spec never states
 

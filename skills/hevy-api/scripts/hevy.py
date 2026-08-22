@@ -246,9 +246,23 @@ def training_summary(weeks: int) -> dict:
                 if weight and (entry["best_weight_kg"] or 0) < weight:
                     entry["best_weight_kg"] = weight
 
-    # Both list routes come back newest first, so index 0 is the latest entry.
-    measurements = paginate("/v1/body_measurements", "body_measurements")
-    all_weights = [(m["date"], m["weight_kg"]) for m in measurements if m.get("weight_kg")]
+    # Measurements come newest first too, so index 0 is the latest entry. The
+    # walk needs every entry inside the window plus one weighted entry for the
+    # stale fallback, and stops at the first page that satisfies both.
+    all_weights: list[tuple[str, float]] = []
+    page = 1
+    while True:
+        payload = request("GET", "/v1/body_measurements",
+                          params={"page": page, "pageSize": 10})
+        batch = payload.get("body_measurements", [])
+        all_weights.extend((m["date"], m["weight_kg"])
+                           for m in batch if m.get("weight_kg"))
+        if not batch or (all_weights
+                         and dt.date.fromisoformat(batch[-1]["date"]) < since.date()):
+            break
+        if page >= payload.get("page_count", page):
+            break
+        page += 1
     weights = [w for w in all_weights if dt.date.fromisoformat(w[0]) >= since.date()]
     stale = not weights and all_weights
 
@@ -448,6 +462,9 @@ def run_query(statement: str) -> list[dict]:
     if not re.match(r"^\s*(SELECT|WITH)\b", statement, re.IGNORECASE):
         sys.exit("Only SELECT and WITH statements are allowed. The mirror is a "
                  "copy of Hevy, so writes go to the API instead.")
+    if not DB_FILE.is_file():
+        sys.exit("The mirror is enabled but nothing is synced yet. "
+                 "Run 'hevy.py sync' first, or drop --no-sync.")
     db = open_db(read_only=True)
     try:
         rows = [dict(row) for row in db.execute(statement).fetchall()]
@@ -646,11 +663,13 @@ def run(args: argparse.Namespace) -> object:
         return request("PUT", f"/v1/workouts/{args.workout_id}",
                        body=read_json_arg(args.body))
     if cmd == "events":
-        extra = {"since": args.since} if args.since else None
+        # Sent explicitly because the spec's epoch default is wrong: omitting
+        # since returns no events at all (reference/observed.md).
+        extra = {"since": args.since or "1970-01-01T00:00:00Z"}
         if args.all:
             return paginate("/v1/workouts/events", "events", args.page_size, extra)
         params = page_params()
-        params.update(extra or {})
+        params.update(extra)
         return request("GET", "/v1/workouts/events", params=params)
 
     if cmd == "routines":
@@ -760,7 +779,7 @@ def main() -> int:
     except HevyError as exc:
         print(str(exc), file=sys.stderr)
         return 1
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, json.JSONDecodeError, sqlite3.Error) as exc:
         print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
     return 0

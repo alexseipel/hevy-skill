@@ -168,10 +168,14 @@ def main() -> int:
 
     check_discovery_wiring()
 
+    # .json is scanned too: a captured response pasted into a fixture is the
+    # likeliest place a real key would land.
     scanned = [p for root in (PUBLISHED_ROOT, DEV_ROOT)
                for d in skill_dirs(root) for p in sorted(d.rglob("*"))]
+    scanned += sorted((ROOT / "scripts").glob("*.py"))
+    scanned += sorted((ROOT / "tests").glob("*.py"))
     for path in scanned:
-        if path.is_file() and path.suffix in (".md", ".py"):
+        if path.is_file() and path.suffix in (".md", ".py", ".json"):
             check_secrets(path)
             if path.suffix == ".md":
                 check_links(path)

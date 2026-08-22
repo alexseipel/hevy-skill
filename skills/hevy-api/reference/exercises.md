@@ -11,7 +11,7 @@ The catalogue: Hevy's built-in exercises plus the account's custom ones.
 | ---------- | ------ | ------- | -------------------------------- |
 | `api-key`  | header | —       | required                         |
 | `page`     | query  | 1       | 1 or greater                     |
-| `pageSize` | query  | 5       | maximum 100, the highest cap here |
+| `pageSize` | query  | 100     | maximum 100, the highest cap here. The spec's default of 5 is wrong ([observed.md](observed.md)) |
 
 ```bash
 curl -s "https://api.hevyapp.com/v1/exercise_templates?pageSize=100" \

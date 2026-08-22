@@ -71,7 +71,7 @@ def apply_patch(document: dict, patch: dict) -> None:
                              f"'{patch['parameter']}', found {removed}")
         return
 
-    if op == "set-parameter-default":
+    if op in ("set-parameter-default", "drop-parameter-default"):
         # Addressed by name, never by array index: dropping the api-key
         # parameter shifts every index, and so would any upstream reorder.
         operation = document["paths"][patch["route"]][patch["method"]]
@@ -83,7 +83,10 @@ def apply_patch(document: dict, patch: dict) -> None:
         current = matches[0].get("schema", {}).get("default")
         if current != patch["from"]:
             raise PatchError(f"{pid}: expected default {patch['from']!r}, found {current!r}")
-        matches[0]["schema"]["default"] = patch["to"]
+        if op == "set-parameter-default":
+            matches[0]["schema"]["default"] = patch["to"]
+        else:
+            del matches[0]["schema"]["default"]
         return
 
     container, key = resolve(document, patch["pointer"])

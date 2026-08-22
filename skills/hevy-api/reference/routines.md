@@ -11,7 +11,7 @@ differences: a routine set adds `rep_range`, and a routine exercise adds
 | ---------- | ------ | ------- | ------------ |
 | `api-key`  | header | —       | required     |
 | `page`     | query  | 1       | 1 or greater |
-| `pageSize` | query  | 5       | maximum 10   |
+| `pageSize` | query  | 10      | maximum 10. The spec's default of 5 is wrong ([observed.md](observed.md)) |
 
 ```bash
 curl -s "https://api.hevyapp.com/v1/routines?pageSize=10" -H "api-key: $HEVY_API_KEY"

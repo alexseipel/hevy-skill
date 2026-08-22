@@ -1,7 +1,7 @@
 {
   "_comment": "Corrections applied to Hevy's published OpenAPI document. Each patch asserts what it expects to find, so a patch that stops matching means upstream changed and the correction needs re-checking rather than silently reapplying. See reference/observed.md for how each was verified.",
   "upstream": "https://api.hevyapp.com/docs/swagger-ui-init.js",
-  "verified_at": "2026-08-22",
+  "verified_at": "2026-08-23",
   "patches": [
     {
       "id": "add-servers",
@@ -149,10 +149,30 @@
       "parameter": "pageSize",
       "from": 5,
       "to": 100
+    },
+    {
+      "id": "page-size-default-events",
+      "why": "The observed default is the route's cap, not 5. Measured with since at the epoch, so the page could fill.",
+      "op": "set-parameter-default",
+      "route": "/v1/workouts/events",
+      "method": "get",
+      "parameter": "pageSize",
+      "from": 5,
+      "to": 10
+    },
+    {
+      "id": "since-default-dropped",
+      "why": "The spec defaults since to the epoch, but omitting it returns nothing: 0 events and page_count 1 on an account whose epoch backfill has hundreds of workouts, observed 2026-08-23. Whether the server substitutes a recent default or matches nothing was not determined. The false default is dropped so a generated client sends since explicitly.",
+      "op": "drop-parameter-default",
+      "route": "/v1/workouts/events",
+      "method": "get",
+      "parameter": "since",
+      "from": "1970-01-01T00:00:00Z"
     }
   ],
   "page_not_found_routes": [
     "/v1/workouts",
+    "/v1/workouts/events",
     "/v1/routines",
     "/v1/routine_folders",
     "/v1/exercise_templates"

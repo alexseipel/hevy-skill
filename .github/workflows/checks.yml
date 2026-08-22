@@ -6,8 +6,13 @@ on:
   pull_request:
   schedule:
     # Weekly, so a change to Hevy's spec surfaces as a failing job rather than
-    # as a wrong answer in somebody's editor.
+    # as a wrong answer in somebody's editor. GitHub pauses schedules after 60
+    # days without repository activity; a push resumes them.
     - cron: "17 6 * * 1"
+
+# The jobs only read the repository.
+permissions:
+  contents: read
 
 jobs:
   validate:
@@ -23,6 +28,8 @@ jobs:
         run: python3 scripts/check_coverage.py
       - name: Check the corrected spec matches its patches
         run: python3 scripts/build_corrected_spec.py --check
+      - name: Run the offline client tests
+        run: python3 -m unittest discover -s tests
 
   upstream-drift:
     # Scheduled only: it reaches the network, so it must not gate a pull request.

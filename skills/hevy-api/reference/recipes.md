@@ -86,8 +86,10 @@ being missed. `/v1/workouts` alone never reports a deletion.
 
 ## Editing without losing data
 
-Two routes overwrite rather than patch: `PUT /v1/workouts/{workoutId}` and
-`PUT /v1/body_measurements/{date}`.
+`PUT /v1/body_measurements/{date}` overwrites: the spec says omitted fields
+become `null`. Treat `PUT /v1/workouts/{workoutId}` the same way, because it
+takes the full create body and the spec does not say whether omitted exercises
+survive.
 
 Read the current object, change the one field, and send the whole thing back.
 For a measurement, drop `date`, `id` and `created_at` first, because

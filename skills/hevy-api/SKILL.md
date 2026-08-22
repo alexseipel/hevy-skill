@@ -91,13 +91,14 @@ route:
 | Route                    | Observed default | Maximum |
 | ------------------------ | ---------------- | ------- |
 | `/v1/workouts`           | 10               | 10      |
-| `/v1/workouts/events`    | 5 per the spec   | 10      |
+| `/v1/workouts/events`    | 10               | 10      |
 | `/v1/routines`           | 10               | 10      |
 | `/v1/routine_folders`    | 5                | 10      |
 | `/v1/exercise_templates` | 100              | 100     |
 | `/v1/body_measurements`  | 10               | 10      |
 
-**The spec says every default is 5, and it is wrong**
+**The spec's default of 5 is wrong on four routes**: workouts, workout events,
+routines and exercise templates default to their caps
 ([reference/observed.md](reference/observed.md)). Send `pageSize` explicitly and
 the disagreement stops mattering.
 
@@ -136,8 +137,10 @@ returns `updated` and `deleted` events newest first, filtered by `since`.
 4. Save the stored timestamp as the new watermark, so a workout written during
    the run is picked up next time.
 
-`since` defaults to `1970-01-01T00:00:00Z`, which makes the first run a full
-backfill. Use `GET /v1/workouts/count` to size that backfill first.
+The spec says `since` defaults to the epoch, and it is wrong: omitting it
+returns no events at all ([reference/observed.md](reference/observed.md)).
+Send `since` explicitly on every call, from the epoch for the first backfill,
+and size that backfill with `GET /v1/workouts/count` first.
 
 ## Writing data
 
@@ -146,9 +149,9 @@ resolve titles against `/v1/exercise_templates` first and cache the mapping.
 Sets are ordered by array position, not by an index field you send. There is no
 search route, and [reference/recipes.md](reference/recipes.md) has the workaround.
 
-**Updating a workout** takes the same body as creating one, and it replaces the
-workout. Send the complete exercise list every time, because omitted exercises
-are dropped rather than kept.
+**Updating a workout** takes the same body as creating one. The spec does not
+say whether omitted exercises survive, and no write was tested live, so send
+the complete exercise list every time.
 
 **Updating a measurement** is the sharper version of the same rule: `PUT
 /v1/body_measurements/{date}` sets every omitted field to `null`. Read the
@@ -159,8 +162,8 @@ current entry, merge your change into it, and send the whole object back.
 - **A superset id can be `0`.** It indexes the supersets within one workout, so
   `if (superset_id)` drops the first superset of every workout. Test against
   `null`.
-- **The published spec is wrong in nine places**, including the superset field
-  name and every `pageSize` default. The corrections are in
+- **The published spec is wrong in ten places**, including the superset field
+  name and four `pageSize` defaults. The corrections are in
   [reference/observed.md](reference/observed.md), and this skill documents the
   API's actual behaviour.
 - **`GET /v1/routines/{routineId}` wraps its result in `{routine: …}`**, while
@@ -239,7 +242,7 @@ along with the mirror.
 | [reference/exercises.md](reference/exercises.md)         | templates and exercise history, four routes       |
 | [reference/measurements.md](reference/measurements.md)   | body measurements, four routes                    |
 | [reference/user.md](reference/user.md)                   | the account route, and what it does not expose    |
-| [reference/observed.md](reference/observed.md)           | the nine places the published spec is wrong       |
+| [reference/observed.md](reference/observed.md)           | the ten places the published spec is wrong        |
 | [reference/recipes.md](reference/recipes.md)             | the multi-call workflows: search, summary, sync   |
 | [openapi.json](openapi.json)                             | the pinned upstream spec, kept unedited            |
 | [openapi.corrected.json](openapi.corrected.json)         | the same spec with the corrections applied         |

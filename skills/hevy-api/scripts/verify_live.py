@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -49,12 +50,17 @@ def main() -> int:
         check(f"{path} accepts pageSize={cap}", 200, call(path, pageSize=cap)[0])
         check(f"{path} rejects pageSize={cap + 1}", 400, call(path, pageSize=cap + 1)[0])
 
-    defaults = {"/v1/workouts": ("workouts", 10), "/v1/routines": ("routines", 10),
-                "/v1/exercise_templates": ("exercise_templates", 100),
-                "/v1/routine_folders": ("routine_folders", 5),
-                "/v1/body_measurements": ("body_measurements", 10)}
-    for path, (key, expected) in defaults.items():
-        _, body = call(path)
+    # The events feed needs an explicit since, or its page is empty (claim 10)
+    # and the default would look like whatever the account did lately.
+    epoch = {"since": "1970-01-01T00:00:00Z"}
+    defaults = {"/v1/workouts": ("workouts", 10, {}),
+                "/v1/routines": ("routines", 10, {}),
+                "/v1/exercise_templates": ("exercise_templates", 100, {}),
+                "/v1/routine_folders": ("routine_folders", 5, {}),
+                "/v1/body_measurements": ("body_measurements", 10, {}),
+                "/v1/workouts/events": ("events", 10, epoch)}
+    for path, (key, expected, extra) in defaults.items():
+        _, body = call(path, **extra)
         got = len(body.get(key, [])) if isinstance(body, dict) else None
         # An account with fewer entries than the default returns fewer, which is
         # not a failed claim about the default.
@@ -62,23 +68,40 @@ def main() -> int:
         if page_count and page_count > 1:
             check(f"{path} default pageSize is {expected}", expected, got)
 
+    _, unfiltered = call("/v1/workouts/events")
+    _, backfill = call("/v1/workouts/events", pageSize=10, **epoch)
+    if isinstance(backfill, dict) and backfill.get("page_count", 0) > 1:
+        check("omitting since is not an epoch backfill", True,
+              unfiltered.get("page_count", 0) < backfill["page_count"])
+
     check("page=0 returns page 1", (200, 1),
           (lambda s, b: (s, b.get("page")))(*call("/v1/workouts", page=0, pageSize=1)))
     check("page=-1 is rejected", 400, call("/v1/workouts", page=-1, pageSize=1)[0])
-    check("page past the end is 404", 404, call("/v1/workouts", page=99999)[0])
+    for path in caps:
+        check(f"{path} page past the end is 404", 404, call(path, page=99999)[0])
     check("pageSize=0 is accepted", 200, call("/v1/workouts", pageSize=0)[0])
 
+    # Guarded like the blocks below: an account with no workouts skips these
+    # rather than crashing on an empty list.
+    exercise = None
     _, listing = call("/v1/workouts", pageSize=1)
-    workout_id = listing["workouts"][0]["id"]
-    _, workout = call(f"/v1/workouts/{workout_id}")
-    check("GET /v1/workouts/{id} is not wrapped", False, list(workout.keys()) == ["workout"])
-    check("the workout response has no is_private", False, "is_private" in workout)
-    check("Workout.routine_id may be null", True,
-          "routine_id" in listing["workouts"][0])
+    if listing.get("workouts"):
+        workout_id = listing["workouts"][0]["id"]
+        _, workout = call(f"/v1/workouts/{workout_id}")
+        check("GET /v1/workouts/{id} is not wrapped", False, list(workout.keys()) == ["workout"])
+        check("the workout response has no is_private", False, "is_private" in workout)
+        check("workouts carry routine_id", True, "routine_id" in listing["workouts"][0])
+        check("start_time uses the offset format, whole seconds", True,
+              bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00",
+                                workout.get("start_time", ""))))
+        check("updated_at uses Z with milliseconds", True,
+              bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z",
+                                workout.get("updated_at", ""))))
 
-    exercise = workout["exercises"][0]
-    check("workout exercises use superset_id", True, "superset_id" in exercise)
-    check("workout exercises do not use supersets_id", False, "supersets_id" in exercise)
+        if workout.get("exercises"):
+            exercise = workout["exercises"][0]
+            check("workout exercises use superset_id", True, "superset_id" in exercise)
+            check("workout exercises do not use supersets_id", False, "supersets_id" in exercise)
 
     _, routines = call("/v1/routines", pageSize=1)
     if routines.get("routines"):
@@ -94,11 +117,12 @@ def main() -> int:
     check("templates use equipment", True, "equipment" in template)
     check("templates do not use equipment_category", False, "equipment_category" in template)
 
-    template_id = exercise["exercise_template_id"]
-    _, history = call(f"/v1/exercise_history/{template_id}")
-    _, paged = call(f"/v1/exercise_history/{template_id}", page=1, pageSize=1)
-    check("exercise history ignores paging",
-          len(history["exercise_history"]), len(paged["exercise_history"]))
+    if exercise:
+        template_id = exercise["exercise_template_id"]
+        _, history = call(f"/v1/exercise_history/{template_id}")
+        _, paged = call(f"/v1/exercise_history/{template_id}", page=1, pageSize=1)
+        check("exercise history ignores paging",
+              len(history["exercise_history"]), len(paged["exercise_history"]))
 
     _, measurements = call("/v1/body_measurements", pageSize=1)
     if measurements.get("body_measurements"):

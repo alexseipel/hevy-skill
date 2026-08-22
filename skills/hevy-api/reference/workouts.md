@@ -11,7 +11,7 @@ A page of complete workouts, each with its exercises and sets.
 | ---------- | ------ | ------- | ------------------------ |
 | `api-key`  | header | —       | required                 |
 | `page`     | query  | 1       | 1 or greater             |
-| `pageSize` | query  | 5       | maximum 10               |
+| `pageSize` | query  | 10      | maximum 10. The spec's default of 5 is wrong ([observed.md](observed.md)) |
 
 ```bash
 curl -s "https://api.hevyapp.com/v1/workouts?page=1&pageSize=10" \
@@ -22,7 +22,8 @@ curl -s "https://api.hevyapp.com/v1/workouts?page=1&pageSize=10" \
 { "page": 1, "page_count": 5, "workouts": [ { "id": "b459cba5-…", "title": "Morning Workout 💪", "exercises": [] } ] }
 ```
 
-`400` means `pageSize` was over 10 or `page` was below 1.
+`400` means `pageSize` was over 10 or `page` was negative. `page=0` returns
+page 1.
 
 ## POST /v1/workouts
 
@@ -84,8 +85,8 @@ The incremental feed. Events run newest first.
 | ---------- | ------ | ---------------------- | ---------------------------- |
 | `api-key`  | header | —                      | required                     |
 | `page`     | query  | 1                      | 1 or greater                 |
-| `pageSize` | query  | 5                      | maximum 10                   |
-| `since`    | query  | `1970-01-01T00:00:00Z` | ISO 8601 timestamp           |
+| `pageSize` | query  | 10                     | maximum 10. The spec's default of 5 is wrong ([observed.md](observed.md)) |
+| `since`    | query  | —                      | ISO 8601. The spec's epoch default is wrong: omitting `since` returns no events ([observed.md](observed.md)) |
 
 ```bash
 curl -s "https://api.hevyapp.com/v1/workouts/events?since=2024-08-01T00:00:00Z&pageSize=10" \
@@ -102,8 +103,10 @@ Branch on `type`: `updated` carries a full `workout` to upsert, `deleted`
 carries only an `id` to remove. This is the only route that reports deletions,
 so a client that polls `/v1/workouts` alone never learns a workout is gone.
 
-The default `since` makes an unfiltered call a full history dump. Always pass
-`since` after the first sync.
+Pass `since` on every call: the epoch for a first backfill, the stored
+watermark after. Omitting it does not dump the full history, whatever the
+spec's default suggests
+([observed.md](observed.md#10-omitting-since-is-not-an-epoch-backfill)).
 
 `500` is a documented response here, so retry with backoff rather than treating
 it as fatal.
@@ -121,9 +124,10 @@ belongs to another account.
 
 Takes the same body as `POST /v1/workouts` and returns the updated `Workout`.
 
-**It replaces the workout.** Every exercise and set you leave out is dropped,
-so read the workout, edit the object, and send the whole thing back. The
-response and the request use the same field names, so nothing needs renaming
-along the way.
+**Treat it as a full replacement.** The spec gives this route the complete
+create body and does not say whether omitted exercises survive. No write route
+has been tested live ([observed.md](observed.md#not-verified)), so read the
+workout, edit the object, and send the whole thing back. The response and the
+request use the same field names, so nothing needs renaming along the way.
 
 `400` returns `{"error": "…"}`.

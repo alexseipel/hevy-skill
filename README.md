@@ -1,12 +1,14 @@
 # hevy-skill
 
+[![checks](https://github.com/alexseipel/hevy-skill/actions/workflows/checks.yml/badge.svg)](https://github.com/alexseipel/hevy-skill/actions/workflows/checks.yml)
+
 An agent skill for the [Hevy](https://hevy.com) training API: every endpoint of
 `api.hevyapp.com/v1`, the object shapes behind them, and a dependency-free
 client to call them with.
 
 All 22 operations are covered, and a check in CI proves it rather than claiming
 it. Every documented behaviour was verified against a live account, which turned
-up **nine places where Hevy's published OpenAPI spec is wrong**. Those are listed
+up **ten places where Hevy's published OpenAPI spec is wrong**. Those are listed
 in [reference/observed.md](skills/hevy-api/reference/observed.md), and this skill
 documents what the API does rather than what the spec says.
 
@@ -31,7 +33,7 @@ cp -R skills/hevy-api ~/.agents/skills/hevy-api
 ```
 
 Claude Code users can add the repository as a plugin marketplace instead, which
-installs the same directory:
+installs the same directory under a plugin namespace, as `hevy:hevy-api`:
 
 ```bash
 claude plugin marketplace add alexseipel/hevy-skill
@@ -82,7 +84,7 @@ route. `--help` lists every command.
 ## What this has that a Hevy client usually doesn't
 
 **A corrected OpenAPI document.** Hevy's published spec disagrees with Hevy's
-running API in nine places, and it declares no server and no security scheme at
+running API in ten places, and it declares no server and no security scheme at
 all, so a client generated from it knows neither where to send a request nor how
 to authenticate. [openapi.corrected.json](skills/hevy-api/openapi.corrected.json)
 fixes all of it. Feed it to any code generator, in any language.
@@ -92,7 +94,7 @@ python3 scripts/build_corrected_spec.py --fetch
 ```
 
 That one command re-pins Hevy's document straight from the Swagger UI bundle it
-is served in, then re-applies all 15 corrections from
+is served in, then re-applies all 17 corrections from
 [spec-patches.json](skills/hevy-api/spec-patches.json), each carrying what it
 asserts and why. **A patch that no longer matches stops the build** rather than
 reapplying quietly, because the two things that cause it are Hevy fixing the bug
@@ -108,9 +110,9 @@ Warmup sets are excluded, which otherwise inflates volume by roughly a fifth.
 **Writes that refuse to run without `--yes`.** The API has no delete route, so a
 create is permanent and an update overwrites.
 
-**Claims that re-run.** `verify_live.py` re-checks 38 statements about live
-behaviour against a real account, and a weekly CI job re-applies every spec
-correction to whatever Hevy is serving that day.
+**Claims that re-run.** `verify_live.py` re-checks every observed claim against
+a real account, and a weekly CI job re-applies every spec correction to
+whatever Hevy is serving that day.
 
 ### Optional: a local SQLite mirror
 
@@ -181,6 +183,7 @@ mirror is on.
 | `skills/hevy-api/openapi.json` | the pinned upstream spec, kept unedited for comparison |
 | `skills/hevy-api/openapi.corrected.json` | the same spec with the corrections applied |
 | `skills/hevy-api/spec-patches.json` | each correction, with what it asserts and why |
+| `tests/` | offline tests for the client, run in CI without a key |
 
 Two more skills ship with a clone and are **not** installed alongside the API
 skill. They are the rules this repository is built under, and they load
@@ -210,7 +213,7 @@ the behaviour you depend on with tests.
 
 ## Checks
 
-Three run on every pull request:
+Four run on every pull request:
 
 ```bash
 python3 scripts/validate_skill.py
@@ -234,16 +237,25 @@ python3 scripts/build_corrected_spec.py --check
 
 Fails when the committed corrected spec no longer matches its patch set.
 
-The fourth needs a key, so it runs on demand rather than in CI:
+```bash
+python3 -m unittest discover -s tests
+```
+
+Offline tests for the client: the summary arithmetic, the sync upsert and
+delete paths, and the guard rails, all against canned responses. No key needed.
+
+The fifth needs a key, so it runs on demand rather than in CI:
 
 ```bash
 HEVY_API_KEY=... python3 skills/hevy-api/scripts/verify_live.py
 ```
 
-38 claims about live behaviour, re-checked against a real account. Read-only: it
-calls no write route, because the API has no delete route and test data in a
-real account is permanent. A failure names the claim, so it points at the line
-of documentation that went stale.
+Every observed claim, re-checked against a real account. The exact count
+depends on the account, because checks that need routines, folders or
+measurements are skipped when there are none. Read-only: it calls no write
+route, because the API has no delete route and test data in a real account is
+permanent. A failure names the claim, so it points at the line of documentation
+that went stale.
 
 Conventions for editing the skills are in [AGENTS.md](AGENTS.md), which
 [CLAUDE.md](CLAUDE.md) points at as well.
@@ -260,5 +272,6 @@ be checked against, and `openapi.corrected.json` is generated from it. Copyright
 in that document belongs to Hevy, who attach no licence to it. [NOTICE](NOTICE)
 says so, and the MIT grant does not reach them or the Hevy name.
 
-No description or example from Hevy's document is reproduced verbatim in any
-Markdown file here. The documentation restates the facts and cites the source.
+The documentation restates Hevy's descriptions in different words and cites
+the source. Sample payloads reuse the spec's own example values, such as ids
+and workout titles, and [NOTICE](NOTICE) covers them.

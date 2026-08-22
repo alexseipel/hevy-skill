@@ -20,5 +20,6 @@ the skills, the reference documentation, the client, the checks, and the
 corrections themselves.
 
 Prose in the documentation restates facts from Hevy's document in different
-words and cites it. No description or example from it is reproduced verbatim
-in any Markdown file here.
+words and cites it. Sample payloads in the Markdown files reuse example values
+from Hevy's document, such as ids and workout titles. Its descriptions are not
+reproduced.
