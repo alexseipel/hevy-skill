@@ -110,7 +110,14 @@ def request(method: str, path: str, params: dict | None = None,
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 raw = resp.read().decode("utf-8", "replace")
-                return json.loads(raw) if raw.strip() else None
+                if not raw.strip():
+                    return None
+                try:
+                    return json.loads(raw)
+                except json.JSONDecodeError:
+                    # POST /v1/exercise_templates answers with the new id as
+                    # bare text, not JSON (reference/observed.md).
+                    return raw.strip()
         except urllib.error.HTTPError as exc:
             raw = exc.read().decode("utf-8", "replace")
             # A 401 arrives as the plain string "InvalidApiKey" with a text/html

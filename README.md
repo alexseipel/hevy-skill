@@ -8,7 +8,7 @@ client to call them with.
 
 All 22 operations are covered, and a check in CI proves it rather than claiming
 it. Every documented behaviour was verified against a live account, which turned
-up **ten places where Hevy's published OpenAPI spec is wrong**. Those are listed
+up **fourteen places where Hevy's published OpenAPI spec is wrong**. Those are listed
 in [reference/observed.md](skills/hevy-api/reference/observed.md), and this skill
 documents what the API does rather than what the spec says.
 
@@ -84,7 +84,7 @@ route. `--help` lists every command.
 ## What this has that a Hevy client usually doesn't
 
 **A corrected OpenAPI document.** Hevy's published spec disagrees with Hevy's
-running API in ten places, and it declares no server and no security scheme at
+running API in fourteen places, and it declares no server and no security scheme at
 all, so a client generated from it knows neither where to send a request nor how
 to authenticate. [openapi.corrected.json](skills/hevy-api/openapi.corrected.json)
 fixes all of it. Feed it to any code generator, in any language.
@@ -94,7 +94,7 @@ python3 scripts/build_corrected_spec.py --fetch
 ```
 
 That one command re-pins Hevy's document straight from the Swagger UI bundle it
-is served in, then re-applies all 17 corrections from
+is served in, then re-applies all 26 corrections from
 [spec-patches.json](skills/hevy-api/spec-patches.json), each carrying what it
 asserts and why. **A patch that no longer matches stops the build** rather than
 reapplying quietly, because the two things that cause it are Hevy fixing the bug
@@ -110,9 +110,10 @@ Warmup sets are excluded, which otherwise inflates volume by roughly a fifth.
 **Writes that refuse to run without `--yes`.** The API has no delete route, so a
 create is permanent and an update overwrites.
 
-**Claims that re-run.** `verify_live.py` re-checks every observed claim against
-a real account, and a weekly CI job re-applies every spec correction to
-whatever Hevy is serving that day.
+**Claims that re-run.** `verify_live.py` re-checks every read-only claim
+against a real account, and a weekly CI job re-applies every spec correction to
+whatever Hevy is serving that day. The write behaviour was verified once, by
+hand, and observed.md records what was seen.
 
 ### Optional: a local SQLite mirror
 
@@ -201,7 +202,8 @@ drag them along.
 
 ## What it does not cover
 
-- **Deleting anything.** The API has no delete route for any resource.
+- **Deleting anything.** The API has no delete route for any resource, and the
+  server's own `Allow` headers confirm there is no hidden one.
 - **Other people's data.** A key reaches exactly one account, and there is no
   OAuth flow and no user scoping.
 - **Anything outside `/v1`.** No webhooks, no streaming, no bulk import route.
@@ -250,12 +252,12 @@ The fifth needs a key, so it runs on demand rather than in CI:
 HEVY_API_KEY=... python3 skills/hevy-api/scripts/verify_live.py
 ```
 
-Every observed claim, re-checked against a real account. The exact count
+Every read-only claim, re-checked against a real account. The exact count
 depends on the account, because checks that need routines, folders or
-measurements are skipped when there are none. Read-only: it calls no write
-route, because the API has no delete route and test data in a real account is
-permanent. A failure names the claim, so it points at the line of documentation
-that went stale.
+measurements are skipped when there are none. It calls no write route: the API
+has no delete route, so the write behaviour was verified once by hand instead
+([observed.md](skills/hevy-api/reference/observed.md)). A failure names the
+claim, so it points at the line of documentation that went stale.
 
 Conventions for editing the skills are in [AGENTS.md](AGENTS.md), which
 [CLAUDE.md](CLAUDE.md) points at as well.

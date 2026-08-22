@@ -27,8 +27,10 @@ page 1.
 
 ## POST /v1/workouts
 
-Creates a workout and returns `201` with the created `Workout`, including the
-ids the server assigned.
+Creates a workout and returns `201`. The body is **not** the bare `Workout`
+the spec promises: it arrives wrapped in a key and inside an array, as
+`{"workout": [ {...} ]}` ([observed.md](observed.md#11-writes-answer-with-the-object-wrapped-and-in-an-array)).
+Reach the created object with `body.workout[0]`, and read its `id` from there.
 
 The body wraps everything in a `workout` key:
 
@@ -99,6 +101,11 @@ curl -s "https://api.hevyapp.com/v1/workouts/events?since=2024-08-01T00:00:00Z&p
   { "type": "deleted", "id": "efe6801c-…", "deleted_at": "2021-09-13T12:00:00Z" } ] }
 ```
 
+**Read the array as `payload.get("events", [])`.** When the feed has nothing
+to report the key is missing entirely, replaced by an empty `workouts` array
+([observed.md](observed.md#14-an-empty-events-feed-answers-with-the-wrong-key)),
+so indexing it directly throws exactly when a sync has caught up.
+
 Branch on `type`: `updated` carries a full `workout` to upsert, `deleted`
 carries only an `id` to remove. This is the only route that reports deletions,
 so a client that polls `/v1/workouts` alone never learns a workout is gone.
@@ -122,12 +129,19 @@ belongs to another account.
 
 ## PUT /v1/workouts/{workoutId}
 
-Takes the same body as `POST /v1/workouts` and returns the updated `Workout`.
+Takes the same body as `POST /v1/workouts` and returns `200`.
 
-**Treat it as a full replacement.** The spec gives this route the complete
-create body and does not say whether omitted exercises survive. No write route
-has been tested live ([observed.md](observed.md#not-verified)), so read the
-workout, edit the object, and send the whole thing back. The response and the
-request use the same field names, so nothing needs renaming along the way.
+**It replaces the workout.** Verified on 2026-08-23: a workout with two
+exercises, updated with a body carrying one, came back with one. Everything you
+leave out is dropped, so read the workout, edit the object, and send the whole
+thing back.
+
+**Strip the read-only keys first.** The write schema rejects unrecognized
+keys, and a read carries three: `index` on every set, `index` and `title` on
+every exercise. Sending them back is a `400` with "Unrecognized key(s)"
+([observed.md](observed.md#write-behaviour)).
+
+The response is wrapped the same way as the create response, so read the result
+from `body.workout[0]`.
 
 `400` returns `{"error": "…"}`.

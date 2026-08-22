@@ -12,3 +12,6 @@ node_modules/
 
 .DS_Store
 *.log
+
+# Account-specific cleanup notes, not part of the skill
+TEST-DATA-TO-DELETE.md

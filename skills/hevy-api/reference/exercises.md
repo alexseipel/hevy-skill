@@ -38,9 +38,19 @@ largest page budget the API offers.
 
 ## POST /v1/exercise_templates
 
-Creates a custom exercise. It answers `200` rather than `201`, and the body is
-`{"id": 123}` with an integer, while `ExerciseTemplate.id` is a string
-everywhere else. Fetch the template afterwards if you need its canonical form.
+Creates a custom exercise and answers `200` rather than `201`. **The body is
+not JSON.** It is the new template's id as plain text, served with
+`Content-Type: text/html`:
+
+```
+11111111-2222-3333-4444-555555555555
+```
+
+36 bytes, unquoted, so a client that calls `.json()` on it throws
+([observed.md](observed.md#12-creating-an-exercise-template-answers-with-plain-text)).
+The spec promises `{"id": <integer>}` and is wrong on the shape and on the
+type: the id is a UUID string, like every other template id. Read the body as
+text, or look the template up by title afterwards.
 
 The body wraps everything in an `exercise` key.
 
@@ -68,8 +78,9 @@ curl -s -X POST "https://api.hevyapp.com/v1/exercise_templates" \
 Every enum value is listed in [objects.md](objects.md#enums). A value outside
 those lists is a `400`.
 
-`403` returns `{"error": "exceeds-custom-exercise-limit"}`, which is a plan
-limit rather than a rate limit.
+`403` returns `{"error": "exceeds-custom-exercise-limit"}`, a free-plan limit
+of 7 custom exercises that an active Pro key cannot reach
+([observed.md](observed.md#the-403-limits-are-free-plan-limits)).
 
 **`exercise_type` decides which set fields carry meaning.** A `duration`
 exercise ignores `weight_kg` and `reps`, and a `distance_duration` exercise

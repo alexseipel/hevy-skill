@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import datetime as dt
 import importlib.util
+import io
 import json
 import os
 import pathlib
 import sys
 import tempfile
 import unittest
+import unittest.mock as mock
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CLIENT = ROOT / "skills" / "hevy-api" / "scripts" / "hevy.py"
@@ -105,6 +107,22 @@ class ClientTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             hevy.require_confirmation(argparse.Namespace(yes=False))
         hevy.require_confirmation(argparse.Namespace(yes=True))
+
+    def test_request_passes_a_plain_text_body_through(self):
+        """POST /v1/exercise_templates answers with a bare UUID, not JSON."""
+        class FakeResp(io.BytesIO):
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+
+        os.environ["HEVY_API_KEY"] = "test-key"
+        self.addCleanup(os.environ.pop, "HEVY_API_KEY", None)
+        real_request = self.saved["request"]
+        with mock.patch.object(hevy.urllib.request, "urlopen",
+                               return_value=FakeResp(b"11111111-2222-3333-4444-555555555555")):
+            body = real_request("POST", "/v1/exercise_templates",
+                                body={"exercise": {"title": "x"}})
+        self.assertEqual(body, "11111111-2222-3333-4444-555555555555")
 
     # ------------------------------------------------------------- pagination
 
@@ -224,6 +242,13 @@ class ClientTest(unittest.TestCase):
         rows = db.execute("SELECT COUNT(*) AS n FROM workouts").fetchone()["n"]
         db.close()
         self.assertEqual(rows, 0)
+
+    def test_sync_survives_an_empty_events_feed(self):
+        """A caught-up feed has no events key, only an empty workouts array."""
+        self.api.pages["/v1/workouts/events"] = {
+            1: {"page": 1, "page_count": 1, "workouts": []}}
+        counts = hevy.sync(["workouts"])
+        self.assertEqual(counts["workouts"], {"updated": 0, "deleted": 0})
 
     def test_run_query_accepts_reads_only(self):
         with self.assertRaises(SystemExit):

@@ -34,8 +34,9 @@ whatever their spec entries document ([observed.md](observed.md)).
 
 ## POST /v1/body_measurements
 
-Creates the entry for one date and returns `200` with an empty body. Read it
-back with `GET /v1/body_measurements/{date}` if you need the stored values.
+Creates the entry for one date and returns **`201`**, not the `200` the spec
+documents. The body is empty either way, so read the entry back with
+`GET /v1/body_measurements/{date}` when you need the stored values.
 
 ```bash
 curl -s -X POST "https://api.hevyapp.com/v1/body_measurements" \
@@ -66,8 +67,9 @@ Returns `200` with an empty body. The request body is a `BodyMeasurement`
 without `date`, because the path carries it.
 
 **Every omitted field is set to `null`.** This is a full overwrite, not a
-patch. Sending `{"weight_kg": 81}` erases the body-fat percentage and every
-circumference recorded for that date. It is the sharpest edge in the API.
+patch, and it is the sharpest edge in the API. Verified on 2026-08-23: an entry
+holding `weight_kg`, `fat_percent` and `chest_cm`, updated with
+`{"weight_kg": 72}` alone, came back holding the weight and nothing else.
 
 Read, merge, then write. `PutBodyMeasurement` has no `date`, no `id` and no
 `created_at`, so all three come out before the write:

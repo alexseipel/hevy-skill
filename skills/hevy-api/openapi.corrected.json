@@ -2,7 +2,7 @@
   "openapi": "3.0.0",
   "info": {
     "title": "Hevy API Docs",
-    "description": "\n      Welcome to Hevy's public API! We're just starting to roll this out and depending on your\n      feedback, we'll be adding more features and endpoints. Also, we make no guarantees that \n      we won't completely change the structure or abandon the project entirely so use it at\n      your own risk. Currently, this API is only available to Hevy Pro users. You can get your \n      key on our web app at https://hevy.com/settings?developer. If you have any questions,\n      please reach out to pavel@hevyapp.com \ud83e\udd1d.\n\n      CORRECTED COPY. 17 corrections verified against the live API on 2026-08-23, plus 404 responses on 5 list routes. The upstream document is openapi.json, and the corrections are listed in spec-patches.json and reference/observed.md.\n      ",
+    "description": "\n      Welcome to Hevy's public API! We're just starting to roll this out and depending on your\n      feedback, we'll be adding more features and endpoints. Also, we make no guarantees that \n      we won't completely change the structure or abandon the project entirely so use it at\n      your own risk. Currently, this API is only available to Hevy Pro users. You can get your \n      key on our web app at https://hevy.com/settings?developer. If you have any questions,\n      please reach out to pavel@hevyapp.com \ud83e\udd1d.\n\n      CORRECTED COPY. 26 corrections verified against the live API on 2026-08-23, plus 404 responses on 5 list routes. The upstream document is openapi.json, and the corrections are listed in spec-patches.json and reference/observed.md.\n      ",
     "version": "0.0.1",
     "x-corrections-verified-at": "2026-08-23",
     "x-corrections-source": "spec-patches.json",
@@ -96,7 +96,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Workout"
+                  "type": "object",
+                  "required": [
+                    "workout"
+                  ],
+                  "properties": {
+                    "workout": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Workout"
+                      },
+                      "minItems": 1,
+                      "maxItems": 1,
+                      "description": "The created workout, as the array's only element."
+                    }
+                  }
                 }
               }
             }
@@ -260,7 +274,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Workout"
+                  "type": "object",
+                  "required": [
+                    "workout"
+                  ],
+                  "properties": {
+                    "workout": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Workout"
+                      },
+                      "minItems": 1,
+                      "maxItems": 1,
+                      "description": "The updated workout, as the array's only element."
+                    }
+                  }
                 }
               }
             }
@@ -391,7 +419,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Routine"
+                  "type": "object",
+                  "required": [
+                    "routine"
+                  ],
+                  "properties": {
+                    "routine": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Routine"
+                      },
+                      "minItems": 1,
+                      "maxItems": 1,
+                      "description": "The created routine, as the array's only element."
+                    }
+                  }
                 }
               }
             }
@@ -508,7 +550,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Routine"
+                  "type": "object",
+                  "required": [
+                    "routine"
+                  ],
+                  "properties": {
+                    "routine": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Routine"
+                      },
+                      "minItems": 1,
+                      "maxItems": 1,
+                      "description": "The updated routine, as the array's only element."
+                    }
+                  }
                 }
               }
             }
@@ -631,16 +687,12 @@
           "200": {
             "description": "The exercise template was successfully created",
             "content": {
-              "application/json": {
+              "text/html": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "integer",
-                      "description": "The ID of the exercise template",
-                      "example": 123
-                    }
-                  }
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "The new template's id as bare text: 36 bytes, no JSON, no quotes.",
+                  "example": "11111111-2222-3333-4444-555555555555"
                 }
               }
             }
@@ -797,7 +849,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoutineFolder"
+                  "type": "object",
+                  "required": [
+                    "routine_folder"
+                  ],
+                  "properties": {
+                    "routine_folder": {
+                      "$ref": "#/components/schemas/RoutineFolder"
+                    }
+                  }
                 }
               }
             }
@@ -990,7 +1050,7 @@
           }
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "The measurement was successfully created"
           },
           "400": {
@@ -2423,8 +2483,7 @@
         "type": "object",
         "required": [
           "page",
-          "page_count",
-          "events"
+          "page_count"
         ],
         "properties": {
           "page": {
@@ -2451,7 +2510,8 @@
             },
             "description": "An array of workout events (either updated or deleted)"
           }
-        }
+        },
+        "description": "When the feed has nothing to report, events is absent and an empty workouts array takes its place. Read events with a default."
       }
     },
     "securitySchemes": {

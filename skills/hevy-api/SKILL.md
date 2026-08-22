@@ -35,20 +35,20 @@ All 22, grouped by resource. Every one requires the `api-key` header.
 | Method | Path                    | Returns                                     |
 | ------ | ----------------------- | ------------------------------------------- |
 | GET    | `/v1/workouts`          | `{page, page_count, workouts[]}`            |
-| POST   | `/v1/workouts`          | `201` with the created `Workout`            |
+| POST   | `/v1/workouts`          | `201`, as `{workout: [ … ]}`                |
 | GET    | `/v1/workouts/count`    | `{workout_count}`                           |
 | GET    | `/v1/workouts/events`   | `{page, page_count, events[]}` for syncing  |
 | GET    | `/v1/workouts/{workoutId}` | a `Workout`                              |
-| PUT    | `/v1/workouts/{workoutId}` | the updated `Workout`                    |
+| PUT    | `/v1/workouts/{workoutId}` | `200`, as `{workout: [ … ]}`             |
 
 ### [Routines](reference/routines.md)
 
 | Method | Path                       | Returns                          |
 | ------ | -------------------------- | -------------------------------- |
 | GET    | `/v1/routines`             | `{page, page_count, routines[]}` |
-| POST   | `/v1/routines`             | `201` with the created `Routine` |
+| POST   | `/v1/routines`             | `201`, as `{routine: [ … ]}`     |
 | GET    | `/v1/routines/{routineId}` | `{routine}`, wrapped             |
-| PUT    | `/v1/routines/{routineId}` | the updated `Routine`            |
+| PUT    | `/v1/routines/{routineId}` | `200`, as `{routine: [ … ]}`     |
 
 ### [Routine folders](reference/routines.md#routine-folders)
 
@@ -63,7 +63,7 @@ All 22, grouped by resource. Every one requires the `api-key` header.
 | Method | Path                                       | Returns                                    |
 | ------ | ------------------------------------------ | ------------------------------------------ |
 | GET    | `/v1/exercise_templates`                   | `{page, page_count, exercise_templates[]}` |
-| POST   | `/v1/exercise_templates`                   | `200` with `{id}`                          |
+| POST   | `/v1/exercise_templates`                   | `200`, a bare UUID as plain text           |
 | GET    | `/v1/exercise_templates/{exerciseTemplateId}` | an `ExerciseTemplate`                   |
 | GET    | `/v1/exercise_history/{exerciseTemplateId}` | `{exercise_history[]}`                    |
 
@@ -72,7 +72,7 @@ All 22, grouped by resource. Every one requires the `api-key` header.
 | Method | Path                          | Returns                                   |
 | ------ | ----------------------------- | ----------------------------------------- |
 | GET    | `/v1/body_measurements`       | `{page, page_count, body_measurements[]}` |
-| POST   | `/v1/body_measurements`       | `200`, empty body                         |
+| POST   | `/v1/body_measurements`       | `201`, empty body                         |
 | GET    | `/v1/body_measurements/{date}` | a `BodyMeasurement`                      |
 | PUT    | `/v1/body_measurements/{date}` | `200`, empty body                        |
 
@@ -113,8 +113,8 @@ last one returns `404`, and `page=0` quietly returns page 1.
 | 400    | list routes                                  | `pageSize` over the cap, or a negative `page`       |
 | 400    | POST and PUT routes                          | `{"error": "…"}`, an invalid body                   |
 | 401    | everywhere                                   | missing or wrong `api-key`                          |
-| 403    | `POST /v1/routines`                          | the account's routine limit is reached              |
-| 403    | `POST /v1/exercise_templates`                | `{"error": "exceeds-custom-exercise-limit"}`        |
+| 403    | `POST /v1/routines`                          | routine limit: free plan only, unreachable on active Pro |
+| 403    | `POST /v1/exercise_templates`                | `{"error": "exceeds-custom-exercise-limit"}`, free plan only |
 | 404    | single-item GETs, `PUT /v1/routines/{id}`    | no such item, or it belongs to another account      |
 | 404    | list routes                                  | `page` past `page_count`                            |
 | 409    | `POST /v1/body_measurements`                 | a measurement already exists for that date          |
@@ -149,9 +149,11 @@ resolve titles against `/v1/exercise_templates` first and cache the mapping.
 Sets are ordered by array position, not by an index field you send. There is no
 search route, and [reference/recipes.md](reference/recipes.md) has the workaround.
 
-**Updating a workout** takes the same body as creating one. The spec does not
-say whether omitted exercises survive, and no write was tested live, so send
-the complete exercise list every time.
+**Updating a workout** takes the same body as creating one and replaces it.
+Verified against a live account: two exercises in, an update carrying one, one
+left afterwards. Send the complete exercise list every time, stripped of
+`index` on sets and of `index` and `title` on exercises, which only reads
+carry.
 
 **Updating a measurement** is the sharper version of the same rule: `PUT
 /v1/body_measurements/{date}` sets every omitted field to `null`. Read the
@@ -162,21 +164,35 @@ current entry, merge your change into it, and send the whole object back.
 - **A superset id can be `0`.** It indexes the supersets within one workout, so
   `if (superset_id)` drops the first superset of every workout. Test against
   `null`.
-- **The published spec is wrong in ten places**, including the superset field
-  name and four `pageSize` defaults. The corrections are in
+- **The published spec is wrong in fourteen places**, including the superset
+  field name and four `pageSize` defaults. The corrections are in
   [reference/observed.md](reference/observed.md), and this skill documents the
   API's actual behaviour.
 - **`GET /v1/routines/{routineId}` wraps its result in `{routine: …}`**, while
   the workout, folder and template equivalents return the object bare.
-- **`POST /v1/exercise_templates` answers `200`, not `201`**, and the `id` it
-  returns is an integer, while `ExerciseTemplate.id` is a string everywhere
-  else.
+- **Write responses are wrapped, and inside an array.** Creating or updating a
+  workout returns `{"workout": [ {...} ]}`, not the bare object the spec
+  promises, and routines behave the same way. Read the result from
+  `body.workout[0]`.
+- **`POST /v1/exercise_templates` does not return JSON at all.** The body is
+  the new template's UUID as plain text, served as `text/html`.
+- **A read cannot be written back untouched.** The write schemas reject
+  unrecognized keys, so strip `index` from every set and `index` and `title`
+  from every exercise before a `PUT`, or it is a `400`.
 - **`rpe` on a set accepts only `6, 7, 7.5, 8, 8.5, 9, 9.5, 10`** or `null`.
 - **Reading an exercise template gives you `equipment`**, while creating one
   takes `equipment_category`.
 - **Weights are kilograms and distances are metres** in every field, whatever
   the account's display units are.
-- **There is no delete route** for any resource.
+- **There is no delete route** for any resource, and no hidden one: the
+  server's `Allow` headers list `GET`, `HEAD`, `POST` and `PUT` only
+  ([reference/observed.md](reference/observed.md#no-hidden-delete-route)).
+- **The two documented `403` limits are free-plan limits**, at 4 routines and
+  7 custom exercises. The API is Pro-only, so an active Pro key cannot reach
+  either branch, and a lapsed key is unverified
+  ([reference/observed.md](reference/observed.md#the-403-limits-are-free-plan-limits)).
+- **150 sets per workout and per routine**, on Pro as well, per Hevy's help
+  centre. Which status the API returns for a longer one is unmeasured.
 - **The API is explicitly unstable.** Its own documentation says the structure
   may change or the project may be abandoned, so pin behaviour with tests.
 
@@ -242,14 +258,15 @@ along with the mirror.
 | [reference/exercises.md](reference/exercises.md)         | templates and exercise history, four routes       |
 | [reference/measurements.md](reference/measurements.md)   | body measurements, four routes                    |
 | [reference/user.md](reference/user.md)                   | the account route, and what it does not expose    |
-| [reference/observed.md](reference/observed.md)           | the ten places the published spec is wrong        |
+| [reference/observed.md](reference/observed.md)           | where the published spec is wrong, row by row     |
 | [reference/recipes.md](reference/recipes.md)             | the multi-call workflows: search, summary, sync   |
 | [openapi.json](openapi.json)                             | the pinned upstream spec, kept unedited            |
 | [openapi.corrected.json](openapi.corrected.json)         | the same spec with the corrections applied         |
 | [spec-patches.json](spec-patches.json)                   | each correction, with what it asserts and why      |
 
 `scripts/hevy.py` is a dependency-free client that handles the header, the
-paging loop and the non-JSON `401`. Beyond one command per endpoint it adds the
+paging loop and the API's two non-JSON bodies, the `401` and the
+create-template response. Beyond one command per endpoint it adds the
 three things the API cannot do itself:
 
 ```bash

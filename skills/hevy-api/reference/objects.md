@@ -26,7 +26,7 @@ or `null`.
 
 `PostWorkoutsRequestSet`, `PostRoutinesRequestSet` and `PutRoutinesRequestSet`
 share these fields. None is marked required, and there is no `index`, because
-order comes from the array.
+order comes from the array. A set that still carries one is rejected.
 
 | Field              | Type          | Notes                                                  |
 | ------------------ | ------------- | ------------------------------------------------------ |
@@ -69,9 +69,10 @@ so test it against `null` rather than for truthiness.
 | `notes`                | string, null  |                                          |
 | `sets`                 | Set[]         |                                          |
 
-The request and response use the same name, so a read-edit-write round trip
-needs no rename. A client generated from the spec does need one, because the
-spec's response schema is wrong.
+The request and response use the same name for `superset_id`, so nothing needs
+renaming. A round trip still strips the response-only keys, `index` and
+`title` here and `index` on each set, because the write schemas reject
+unrecognized keys ([observed.md](observed.md#write-behaviour)).
 
 ## Workout
 
@@ -100,6 +101,9 @@ not list it, so do not expect to read it back.
 | `updated_at` | string       | ISO 8601                               |
 | `created_at` | string       | ISO 8601                               |
 | `exercises`  | Exercise[]   | routine exercises, with `rest_seconds` |
+
+`notes` can be sent when creating or updating a routine and never comes back,
+the same way `is_private` behaves on a workout.
 
 ## RoutineFolder
 
@@ -186,7 +190,10 @@ event is one of two shapes, told apart by `type`:
 | `deleted`   | `type`, `id`, `deleted_at`                   |
 
 `type` and `workout` are required on an update. `type` and `id` are required on
-a delete, and `deleted_at` is not.
+a delete, and `deleted_at` is not, though the one deletion observed on
+2026-08-23 carried all three. When the feed has nothing to report, `events` is
+absent and an empty `workouts` array takes its place
+([observed.md](observed.md#14-an-empty-events-feed-answers-with-the-wrong-key)).
 
 ## Enums
 

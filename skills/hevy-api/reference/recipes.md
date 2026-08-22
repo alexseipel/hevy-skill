@@ -87,13 +87,15 @@ being missed. `/v1/workouts` alone never reports a deletion.
 ## Editing without losing data
 
 `PUT /v1/body_measurements/{date}` overwrites: the spec says omitted fields
-become `null`. Treat `PUT /v1/workouts/{workoutId}` the same way, because it
-takes the full create body and the spec does not say whether omitted exercises
-survive.
+become `null`, and a live update confirmed it. `PUT /v1/workouts/{workoutId}`
+and `PUT /v1/routines/{routineId}` drop omitted exercises the same way,
+verified live ([observed.md](observed.md#write-behaviour)).
 
-Read the current object, change the one field, and send the whole thing back.
-For a measurement, drop `date`, `id` and `created_at` first, because
-`PutBodyMeasurement` has none of them.
+Read the current object, change the one field, strip the keys only reads
+carry, and send it back. For a workout or routine that means `index` on every
+set and `index` and `title` on every exercise. For a measurement it means
+`date`, `id` and `created_at`. The write schemas reject unrecognized keys with
+a `400` ([observed.md](observed.md#write-behaviour)).
 
 The client refuses a write without `--yes`, because the API has no delete
 route and a mistake is permanent.

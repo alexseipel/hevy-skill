@@ -56,8 +56,8 @@ user's behalf.
 
 1. **Read the spec entry in `skills/hevy-api/openapi.json` first**, then check
    it against the live API. The spec is the starting point, not the source of
-   truth: it is already wrong in ten places
-   (`skills/hevy-api/reference/observed.md`).
+   truth: `skills/hevy-api/reference/observed.md` lists the places it is
+   already wrong.
 2. Add the row to the endpoint index in `SKILL.md`.
 3. Add the section to the resource's file under `reference/`, with a runnable
    `curl` and the real response shape.

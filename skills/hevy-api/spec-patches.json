@@ -168,6 +168,155 @@
       "method": "get",
       "parameter": "since",
       "from": "1970-01-01T00:00:00Z"
+    },
+    {
+      "id": "workout-create-response-wrapped",
+      "why": "POST /v1/workouts returns {\"workout\": [Workout]}, not the bare Workout the spec declares. Observed 2026-08-23.",
+      "op": "replace",
+      "pointer": "/paths/~1v1~1workouts/post/responses/201/content/application~1json/schema",
+      "from": { "$ref": "#/components/schemas/Workout" },
+      "to": {
+        "type": "object",
+        "required": ["workout"],
+        "properties": {
+          "workout": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Workout" },
+            "minItems": 1,
+            "maxItems": 1,
+            "description": "The created workout, as the array's only element."
+          }
+        }
+      }
+    },
+    {
+      "id": "workout-update-response-wrapped",
+      "why": "PUT /v1/workouts/{workoutId} wraps its response the same way as the create. Observed 2026-08-23.",
+      "op": "replace",
+      "pointer": "/paths/~1v1~1workouts~1{workoutId}/put/responses/200/content/application~1json/schema",
+      "from": { "$ref": "#/components/schemas/Workout" },
+      "to": {
+        "type": "object",
+        "required": ["workout"],
+        "properties": {
+          "workout": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Workout" },
+            "minItems": 1,
+            "maxItems": 1,
+            "description": "The updated workout, as the array's only element."
+          }
+        }
+      }
+    },
+    {
+      "id": "routine-create-response-wrapped",
+      "why": "POST /v1/routines returns {\"routine\": [Routine]}, not the bare Routine the spec declares. Observed 2026-08-23.",
+      "op": "replace",
+      "pointer": "/paths/~1v1~1routines/post/responses/201/content/application~1json/schema",
+      "from": { "$ref": "#/components/schemas/Routine" },
+      "to": {
+        "type": "object",
+        "required": ["routine"],
+        "properties": {
+          "routine": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Routine" },
+            "minItems": 1,
+            "maxItems": 1,
+            "description": "The created routine, as the array's only element."
+          }
+        }
+      }
+    },
+    {
+      "id": "routine-update-response-wrapped",
+      "why": "PUT /v1/routines/{routineId} wraps its response the same way as the create. Observed 2026-08-23.",
+      "op": "replace",
+      "pointer": "/paths/~1v1~1routines~1{routineId}/put/responses/200/content/application~1json/schema",
+      "from": { "$ref": "#/components/schemas/Routine" },
+      "to": {
+        "type": "object",
+        "required": ["routine"],
+        "properties": {
+          "routine": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Routine" },
+            "minItems": 1,
+            "maxItems": 1,
+            "description": "The updated routine, as the array's only element."
+          }
+        }
+      }
+    },
+    {
+      "id": "folder-create-response-wrapped",
+      "why": "POST /v1/routine_folders returns {\"routine_folder\": {...}}, wrapped in a key but not in an array. Observed 2026-08-23.",
+      "op": "replace",
+      "pointer": "/paths/~1v1~1routine_folders/post/responses/201/content/application~1json/schema",
+      "from": { "$ref": "#/components/schemas/RoutineFolder" },
+      "to": {
+        "type": "object",
+        "required": ["routine_folder"],
+        "properties": {
+          "routine_folder": { "$ref": "#/components/schemas/RoutineFolder" }
+        }
+      }
+    },
+    {
+      "id": "template-create-response-plain-text",
+      "why": "POST /v1/exercise_templates answers with the new template's UUID as bare text under text/html, not the {\"id\": <integer>} the spec declares. Observed 2026-08-23.",
+      "op": "replace",
+      "pointer": "/paths/~1v1~1exercise_templates/post/responses/200/content",
+      "from": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "description": "The ID of the exercise template",
+                "example": 123
+              }
+            }
+          }
+        }
+      },
+      "to": {
+        "text/html": {
+          "schema": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The new template's id as bare text: 36 bytes, no JSON, no quotes.",
+            "example": "11111111-2222-3333-4444-555555555555"
+          }
+        }
+      }
+    },
+    {
+      "id": "measurement-create-201",
+      "why": "POST /v1/body_measurements answers 201, not the 200 the spec documents. Observed 2026-08-23.",
+      "op": "rename-key",
+      "pointer": "/paths/~1v1~1body_measurements/post/responses",
+      "from": "200",
+      "to": "201"
+    },
+    {
+      "id": "events-not-required-when-empty",
+      "why": "events is required by the spec, but a feed with nothing to report omits it and sends an empty workouts array instead. Observed 2026-08-23.",
+      "op": "replace",
+      "pointer": "/components/schemas/PaginatedWorkoutEvents/required",
+      "from": ["page", "page_count", "events"],
+      "to": ["page", "page_count"]
+    },
+    {
+      "id": "events-empty-shape-note",
+      "why": "The stand-in workouts key is behaviour a client has to survive, so the schema says so.",
+      "op": "merge",
+      "pointer": "/components/schemas/PaginatedWorkoutEvents",
+      "value": {
+        "description": "When the feed has nothing to report, events is absent and an empty workouts array takes its place. Read events with a default."
+      }
     }
   ],
   "page_not_found_routes": [

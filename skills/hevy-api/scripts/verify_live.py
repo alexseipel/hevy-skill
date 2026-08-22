@@ -39,6 +39,18 @@ def check(claim: str, expected, actual) -> None:
     results.append((expected == actual, claim, f"expected {expected!r}, got {actual!r}"))
 
 
+def allowed_methods(path: str) -> set[str]:
+    """The server's own route table, from the Allow header OPTIONS returns."""
+    req = urllib.request.Request(BASE + path, method="OPTIONS",
+                                 headers={"api-key": os.environ["HEVY_API_KEY"]})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            allow = response.headers.get("Allow", "")
+    except urllib.error.HTTPError as exc:
+        allow = exc.headers.get("Allow", "") or ""
+    return {method.strip() for method in allow.split(",") if method.strip()}
+
+
 def main() -> int:
     if not os.environ.get("HEVY_API_KEY"):
         sys.exit("HEVY_API_KEY is not set.")
@@ -73,6 +85,20 @@ def main() -> int:
     if isinstance(backfill, dict) and backfill.get("page_count", 0) > 1:
         check("omitting since is not an epoch backfill", True,
               unfiltered.get("page_count", 0) < backfill["page_count"])
+
+    _, drained = call("/v1/workouts/events", since="2099-01-01T00:00:00Z", pageSize=10)
+    if isinstance(drained, dict):
+        check("an empty events feed has no events key", False, "events" in drained)
+        check("an empty events feed sends workouts instead", True, "workouts" in drained)
+
+    # The feed retains deletions, so any account that has ever deleted a
+    # workout pins the deleted-event shape. Deletions are rare, so one page
+    # of recent events is enough to find the latest.
+    events = backfill.get("events", []) if isinstance(backfill, dict) else []
+    removed = next((e for e in events if e.get("type") == "deleted"), None)
+    if removed:
+        check("a deleted event carries type, id and deleted_at", True,
+              {"type", "id", "deleted_at"} <= set(removed))
 
     check("page=0 returns page 1", (200, 1),
           (lambda s, b: (s, b.get("page")))(*call("/v1/workouts", page=0, pageSize=1)))
@@ -137,8 +163,48 @@ def main() -> int:
         check("folder ids are integers", "int",
               type(folders["routine_folders"][0]["id"]).__name__)
 
+    _, page_one = call("/v1/workouts", pageSize=10)
+    starts = [w["start_time"] for w in page_one.get("workouts", [])]
+    if len(starts) > 1:
+        check("/v1/workouts lists newest first", True,
+              starts == sorted(starts, reverse=True))
+
+    # Routines are grouped by folder rather than sorted by date
+    # (reference/observed.md), so the whole list is walked and reduced to the
+    # sequence of folder ids its runs appear in.
+    run_ids: list = []
+    page = 1
+    while True:
+        _, body = call("/v1/routines", page=page, pageSize=10)
+        if not isinstance(body, dict):
+            break
+        for routine in body.get("routines", []):
+            fid = routine.get("folder_id")
+            if not run_ids or run_ids[-1] != fid:
+                run_ids.append(fid)
+        if page >= body.get("page_count", page):
+            break
+        page += 1
+    grouped = [f for f in run_ids if f is not None]
+    if len(grouped) > 1:
+        check("/v1/routines groups by folder in ascending id", True,
+              len(grouped) == len(set(grouped)) and grouped == sorted(grouped))
+        check("/v1/routines puts unfoldered routines last", True,
+              run_ids.count(None) <= 1
+              and (None not in run_ids or run_ids[-1] is None))
+
     check("an unknown workout id is 404", 404,
           call("/v1/workouts/00000000-0000-0000-0000-000000000000")[0])
+
+    # The Allow header is the server enumerating its own registered methods,
+    # which settles "is there a hidden delete" more strongly than probing.
+    workout_methods = allowed_methods("/v1/workouts/00000000-0000-0000-0000-000000000000")
+    if workout_methods:
+        check("a workout allows GET, HEAD and PUT only",
+              {"GET", "HEAD", "PUT"}, workout_methods)
+    folder_methods = allowed_methods("/v1/routine_folders/1")
+    if folder_methods:
+        check("a folder can only be read", {"GET", "HEAD"}, folder_methods)
 
     failed = [r for r in results if not r[0]]
     for ok, claim, detail in results:

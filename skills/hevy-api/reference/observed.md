@@ -1,9 +1,10 @@
 # Where the spec is wrong
 
 The published [openapi.json](../openapi.json) disagrees with the live API in
-ten places. Every row below was checked against a real account on
-**2026-08-23** with `scripts/verify_live.py`, and the rest of this skill
-documents the observed column rather than the spec column.
+fourteen places. Every read-only row re-runs with `scripts/verify_live.py`,
+last on **2026-08-23**. Rows 11 to 13 need writes, so they were verified once,
+on the same date, as [write behaviour](#write-behaviour) describes. The rest
+of this skill documents the observed column rather than the spec column.
 
 Re-run the check before trusting a row:
 
@@ -29,6 +30,10 @@ neither where to send a request nor how to authenticate it.
 | 8 | `Workout.routine_id` | `string` | **nullable**, `null` for an unplanned workout |
 | 9 | Timestamp format | `2021-09-14T12:00:00Z` everywhere | **two formats**, see below |
 | 10 | `GET /v1/workouts/events` | `since` defaults to the epoch | **omitting `since` returns no events at all** |
+| 11 | every write that returns a body | returns the bare object | **wrapped in a key**, and for workouts and routines inside an array |
+| 12 | `POST /v1/exercise_templates` | `{"id": <integer>}` | **a bare UUID string as `text/html`** |
+| 13 | `POST /v1/body_measurements` | `200` | **`201`** |
+| 14 | `GET /v1/workouts/events` with nothing to report | `events: []` | **a `workouts` key instead**, and no `events` at all |
 
 ## 1. The superset field is not renamed
 
@@ -130,23 +135,163 @@ certain is that the epoch default in the spec does not hold, so send `since`
 explicitly on every call. The corrected spec drops the false value rather than
 replacing it.
 
+## 11. Writes answer with the object wrapped, and in an array
+
+`POST /v1/workouts` and `PUT /v1/workouts/{workoutId}` both return
+
+```json
+{ "workout": [ { "id": "…", "title": "…", "exercises": [] } ] }
+```
+
+and the routine routes return the same shape under `"routine"`. The spec
+declares a bare `Workout` and `Routine`, so `response.id` is undefined against
+the real API and a generated client reads nothing.
+
+**The array holds one element.** Three shapes are in play across the API, and
+nothing in the spec distinguishes them:
+
+| Route | Shape |
+| ----- | ----- |
+| `POST`/`PUT` workouts and routines | `{"workout": [ {...} ]}`, a one-element array |
+| `POST /v1/routine_folders` | `{"routine_folder": {...}}`, an object |
+| `GET /v1/routines/{routineId}` | `{"routine": {...}}`, an object |
+| every other `GET` for one item | the bare object |
+
+So the read and write shapes of one resource differ, and a shared unwrapping
+helper has to know which shape it is looking at.
+
+## 12. Creating an exercise template answers with plain text
+
+```
+HTTP 200
+Content-Type: text/html; charset=utf-8
+
+11111111-2222-3333-4444-555555555555
+```
+
+36 bytes, no JSON, no quotes. The spec promises `{"id": <integer>}`, so a
+client that parses the body throws, and one that reads `.id` gets nothing. The
+value is the new template's id, and it is a UUID string like every other
+template id rather than the integer the spec names.
+
+## 13. Creating a measurement answers `201`
+
+The spec documents `200`. The body is empty either way, so read the entry back
+with `GET /v1/body_measurements/{date}` when you need the stored values.
+
+## 14. An empty events feed answers with the wrong key
+
+`events` is a required property of `PaginatedWorkoutEvents`. When the feed has
+nothing to report it is absent, and a differently named empty array takes its
+place:
+
+```json
+{ "page": 1, "page_count": 1, "workouts": [] }
+```
+
+So `payload["events"]` raises exactly when a sync has caught up, which is the
+common case for a client polling on a schedule. Read it as
+`payload.get("events", [])`.
+
 ## Ordering, which the spec never states
 
-Every list route returns **newest first**. `/v1/workouts` and
-`/v1/body_measurements` both start at the most recent entry, and
-`/v1/workouts/events` documents the same order.
+**`/v1/workouts` and `/v1/body_measurements` return newest first**, and
+`/v1/workouts/events` documents the same order. That is what makes an early
+stop safe: walking `/v1/workouts` until the last item on a page falls outside
+your window covers the window without paging the whole account.
 
-This is what makes an early stop safe: walking `/v1/workouts` until the last
-item on a page falls outside your window covers the window without paging the
-whole account.
+**`/v1/routines` does not.** It groups by `folder_id`, one contiguous run per
+folder, in ascending folder id, which is the order the folders were created in.
+Routines with no folder come last. Measured on 2026-08-23 on an account with
+many routines across several folders: the runs matched the folder ids in order.
 
-## Not verified
+A routine created today therefore lands wherever its folder sits, not at the
+top, so there is no early stop for this route. Page it all, or fetch by id.
 
-These come from the spec alone, because the account used for verification could
-not produce them:
+## Write behaviour
 
-- **`deleted` workout events.** Three pages of events from the epoch returned
-  `updated` only. The `deleted` shape is documented but unobserved.
-- **Every write route.** The API has no delete route, so testing `POST` and
-  `PUT` leaves permanent data in a real account.
-- **The `403` limits** on routines and custom exercises.
+All eight write routes were exercised once against a real account on
+**2026-08-23**, creating test objects that had to be removed by hand
+afterwards, because the API has no delete route.
+
+| Behaviour | Result |
+| --------- | ------ |
+| `PUT /v1/workouts/{workoutId}` with fewer exercises | **full replace**: two exercises became one |
+| `PUT /v1/routines/{routineId}` with fewer exercises | **full replace**, same as workouts |
+| `PUT /v1/body_measurements/{date}` with one field | **full overwrite**: `fat_percent` and `chest_cm` were erased |
+| `POST /v1/body_measurements` on an existing date | `409` with `{"error":"A measurement for this date already exists"}` |
+| `superset_id` sent as `0`, then as `null` | round-trips unchanged, under the same field name |
+| `rpe`, `rest_seconds`, `rep_range` | all round-trip unchanged |
+| `POST /v1/routine_folders` | lands at **index 0** and pushes every existing folder down by one |
+| `PUT` with the object just read | **`400`**: the write schemas reject unrecognized keys |
+| `PUT /v1/routines/{routineId}` with `exercises: []` | `400`, "Array must contain at least 1 element(s)" |
+| a set of `-100` kg times `-5` reps, an empty title, `sets: []` | all accepted: no range validation |
+
+The folder case was measured: five folders at indexes 0 to 4 became indexes 1
+to 5, keeping their relative order, and the new folder took index 0. There is
+no folder update or delete route, so the API cannot put the order back.
+
+Removing the test data produced the one event nobody had seen. The app-side
+deletion surfaced in `/v1/workouts/events` as `{"type": "deleted", "id": "…",
+"deleted_at": "2024-08-14T23:19:17.142Z"}`: all three fields present, with
+`deleted_at` in the `Z`-millisecond format. The feed retains deletions, so
+`verify_live.py` pins that shape on any account that holds one.
+
+**A read response cannot be written back as it is.** The write schemas reject
+keys they do not declare, and a read carries three of them:
+
+```json
+{"error":"Unrecognized key(s) in object: 'index'. Unrecognized key(s) in object: 'index', 'title'"}
+```
+
+Strip `index` from every set and `index` and `title` from every exercise, and
+the same `PUT` returns `200`. Confirmed identically on workouts and routines.
+Measurements were already documented this way, with `date`, `id` and
+`created_at` coming out before the write.
+
+## No hidden delete route
+
+`OPTIONS` makes the server enumerate its own registered methods in the `Allow`
+header, which settles the question more strongly than probing. Checked on
+2026-08-23:
+
+| Route | Allow |
+| ----- | ----- |
+| `/v1/workouts`, `/v1/routines`, `/v1/routine_folders` | `GET,HEAD,POST` |
+| `/v1/workouts/{workoutId}`, `/v1/routines/{routineId}`, `/v1/body_measurements/{date}` | `GET,HEAD,PUT` |
+| `/v1/routine_folders/{folderId}`, `/v1/exercise_templates/{exerciseTemplateId}` | `GET,HEAD` |
+
+No `DELETE` and no `PATCH` is registered anywhere, and folders and exercise
+templates cannot even be updated. Method overrides (`X-HTTP-Method-Override`,
+`?_method=DELETE`) and guessed paths (`/delete` and `/archive` suffixes,
+`/v2/`, `/v1/me`, `/v1/account`, `/v1/routines/count`) all return `404`.
+`verify_live.py` re-checks the `Allow` headers.
+
+Emptying is not a back door either: a routine must keep at least one exercise,
+so nothing can be hollowed out as a pseudo-delete.
+
+## The `403` limits are free-plan limits
+
+`POST /v1/routines` documents a `403` for exceeding a routine limit, and
+`POST /v1/exercise_templates` a `403` for exceeding a custom-exercise limit.
+Hevy's [Pro subscription page](https://help.hevyapp.com/hc/en-us/articles/35119778922263-Hevy-Pro-Subscription-How-to-get-Pro-and-What-Does-It-Include)
+puts both limits on the free plan, at **4 routines and 7 custom exercises**,
+with Pro lifting each, and the API's own description says it "is only
+available to Hevy Pro users". An account with active Pro therefore cannot
+reach either branch. This one holds many routines, well past the free cap,
+with no `403`.
+
+What a key does when its Pro subscription lapses is not verified. Treat the
+status as a plan problem rather than something to retry, not as impossible.
+
+**A limit that does apply to Pro**: [150 sets per workout and per routine](https://help.hevyapp.com/hc/en-us/articles/34896183826455-Hevy-Set-Limit-Explained-Why-Workouts-and-Routines-Have-a-150-Set-Cap),
+which an import that flattens a long session can meet. The status code it
+returns has not been measured.
+
+## Still not verified
+
+- **The status code of the 150-set cap.** Meeting it takes a write carrying
+  151 sets.
+- **A key whose Pro subscription has lapsed.** The `403` reasoning above
+  stands on Pro entitlement tracking the key, and nobody has watched a key
+  outlive its plan.
