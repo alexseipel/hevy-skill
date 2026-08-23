@@ -58,6 +58,12 @@ def fail(path: Path, rule: str, message: str) -> None:
     failures.append(f"{path.relative_to(ROOT)}: [{rule}] {message}")
 
 
+def unquote(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        return value[1:-1]
+    return value
+
+
 def parse_frontmatter(text: str) -> dict[str, str] | None:
     if not text.startswith("---\n"):
         return None
@@ -71,8 +77,28 @@ def parse_frontmatter(text: str) -> dict[str, str] | None:
         elif ":" in line:
             key, value = line.split(":", 1)
             key = key.strip()
-            fields[key] = value.strip()
+            fields[key] = unquote(value.strip())
     return fields
+
+
+def check_frontmatter_yaml(skill_md: Path, text: str) -> None:
+    """Reject scalars a strict YAML parser rejects.
+
+    Claude Code parses frontmatter leniently, so an unquoted value holding
+    ": " loads here and fails in PyYAML, js-yaml and Psych with "mapping
+    values are not allowed in this context".
+    """
+    end = text.find("\n---", 4)
+    for line in text[4:end].splitlines():
+        match = re.match(r"^([\w-]+):\s*(\S.*)$", line)
+        if not match:
+            continue
+        key, value = match.groups()
+        if value[0] in ("'", '"', ">", "|", "["):
+            continue
+        if ": " in value or " #" in value:
+            fail(skill_md, "yaml",
+                 f"unquoted '{key}' value breaks strict YAML parsers. Quote it.")
 
 
 def check_skill(skill_md: Path) -> None:
@@ -83,6 +109,7 @@ def check_skill(skill_md: Path) -> None:
     if front is None:
         fail(skill_md, "frontmatter", "no YAML frontmatter between --- markers")
         return
+    check_frontmatter_yaml(skill_md, text)
 
     for field in ("name", "description"):
         if not front.get(field):

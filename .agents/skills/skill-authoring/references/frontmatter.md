@@ -19,6 +19,11 @@ loaded, from a local directory to the Skills API.
 | `metadata` | no | a free-form map for your own tooling to read |
 | `allowed-tools` | no | tools granted without a permission prompt for the turn |
 
+**Quote every value that holds free text.** An unquoted description containing
+a colon followed by a space fails strict YAML parsers with "mapping values are
+not allowed in this context". Claude Code parses leniently and masks the error,
+so the file looks fine exactly where portability is not being tested.
+
 ## What happens when you exceed them
 
 Claude Code accepts a longer list, including `when_to_use`, `argument-hint`,

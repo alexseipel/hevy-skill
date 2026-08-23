@@ -1,6 +1,6 @@
 ---
 name: writing
-description: House style for every English word this repo ships: README, SKILL.md and its references, code comments, commit messages, PR text. Sources every factual claim, keeps prose out of the AI register, and holds the line on concision. Use before writing or editing any prose here, down to a single comment.
+description: "House style for every English word this repo ships: README, SKILL.md and its references, code comments, commit messages, PR text. Sources every factual claim, keeps prose out of the AI register, and holds the line on concision. Use before writing or editing any prose here, down to a single comment."
 license: MIT
 ---
 

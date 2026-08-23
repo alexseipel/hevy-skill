@@ -1,6 +1,6 @@
 ---
 name: hevy-api
-description: Call the Hevy REST API at api.hevyapp.com from any language: workouts, routines, routine folders, exercise templates, exercise history, body measurements, user info. Covers all 22 endpoints under /v1, the api-key header, pageSize caps, the workout-events sync feed, and the set and exercise shapes routines and workouts share. Use when reading or writing Hevy training data, syncing a workout cache, creating routines or custom exercises, importing gym logs, or debugging a Hevy API response.
+description: "Call the Hevy REST API at api.hevyapp.com from any language: workouts, routines, routine folders, exercise templates, exercise history, body measurements, user info. Covers all 22 endpoints under /v1, the api-key header, pageSize caps, the workout-events sync feed, and the set and exercise shapes routines and workouts share. Use when reading or writing Hevy training data, syncing a workout cache, creating routines or custom exercises, importing gym logs, or debugging a Hevy API response."
 license: MIT
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: skill-authoring
-description: How to write an agent skill that other tools can load and a model actually reaches for: the SKILL.md frontmatter the open standard allows, the three tiers of progressive disclosure, how to word a description so it triggers, and the layout conventions the largest published API-skill repositories share. Use when creating a skill, editing one, splitting a large one, debugging why a skill never fires, or reviewing a skill before release.
+description: "How to write an agent skill that other tools can load and a model actually reaches for: the SKILL.md frontmatter the open standard allows, the three tiers of progressive disclosure, how to word a description so it triggers, and the layout conventions the largest published API-skill repositories share. Use when creating a skill, editing one, splitting a large one, debugging why a skill never fires, or reviewing a skill before release."
 license: MIT
 ---
 
@@ -44,12 +44,15 @@ against every other installed skill.
   author describes the skill accurately and never fires.
 - **Front-load it.** The description and `when_to_use` are truncated together
   at 1,536 characters in the listing.
+- **Quote it.** A bare scalar containing a colon and a space is not YAML.
+  Strict parsers refuse the file, while a lenient host loads it and hides the
+  break until another tool reads the skill.
 
 WRONG: `description: A helpful skill for working with fitness data.`
-RIGHT: `description: Call the Hevy REST API at api.hevyapp.com: workouts,
+RIGHT: `description: "Call the Hevy REST API at api.hevyapp.com: workouts,
 routines, exercise templates, body measurements. Covers the api-key header,
 the pageSize caps and the workout-events sync feed. Use when reading or
-writing Hevy training data, or debugging a Hevy API response.`
+writing Hevy training data, or debugging a Hevy API response."`
 
 ## Frontmatter
 
