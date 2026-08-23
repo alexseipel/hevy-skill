@@ -6,9 +6,10 @@ Hevy's OpenAPI document
     skills/hevy-api/openapi.corrected.json
 
 `openapi.json` is Hevy's own OpenAPI document, published at
-https://api.hevyapp.com/docs and redistributed here unmodified so that the
-corrections in `spec-patches.json` have a fixed reference to be checked
-against. `openapi.corrected.json` is generated from it.
+https://api.hevyapp.com/docs. It is extracted from the Swagger UI bundle that
+serves it and re-serialised with no change of content, so that the corrections
+in `spec-patches.json` have a fixed reference to be checked against.
+`openapi.corrected.json` is generated from it.
 
 Copyright in that document, including its descriptions and examples, belongs
 to Hevy. Hevy attaches no licence to it. Both files are included for

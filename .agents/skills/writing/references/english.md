@@ -8,7 +8,7 @@ hardest on, so it produces the densest, most recognisable tells.
 | ----------- | -------------------------------------------------------------------------------------------------------- |
 | Address     | you, for anything the reader does. Never "we", never "one"                                               |
 | Spelling    | one variety per document, and en-GB across the repo. `-ise`, not `-ize`                                  |
-| Typography  | curly quotes in prose, straight quotes inside code; en dash for numeric ranges; no space around the en dash |
+| Typography  | straight quotes everywhere, prose and code alike; en dash for numeric ranges; no space around the en dash |
 | Dates       | ISO 8601 in anything a machine might read, `22 August 2026` in running prose. Never `08/22/2026`         |
 | Terminology | Hevy's own names for Hevy's own things: `routine`, `workout`, `exercise template`, `set`                 |
 

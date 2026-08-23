@@ -16,7 +16,8 @@ what the API does, not what the spec says.
 
 ```bash
 git clone https://github.com/alexseipel/hevy-skill.git
-cp -R skills/hevy-api ~/.agents/skills/hevy-api
+mkdir -p ~/.agents/skills
+cp -R hevy-skill/skills/hevy-api ~/.agents/skills/hevy-api
 ```
 
 No single skills path is read by every tool:
@@ -54,7 +55,8 @@ Then ask the agent in your own words: "sync my last month of Hevy workouts
 into a CSV", "chart my bench press over the past year".
 
 The client also runs on its own, with 26 commands: one per endpoint, plus
-`summary`, `sync`, `sql` and `cache`.
+`summary`, `sync`, `sql` and `cache`. Standard library only, on Python 3.9 or
+newer.
 
 ```bash
 python3 skills/hevy-api/scripts/hevy.py templates --search "bench press"
@@ -196,7 +198,8 @@ behaviour was verified once by hand
 ([observed.md](skills/hevy-api/reference/observed.md)). A failure names the
 claim it broke.
 
-Conventions for editing the skills: [AGENTS.md](AGENTS.md).
+Conventions for editing the skills: [AGENTS.md](AGENTS.md). Getting a change
+merged: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 
@@ -204,10 +207,10 @@ MIT, in [LICENSE](LICENSE), covering the skills, documentation, client and
 checks alike, so a copied skill carries one licence rather than two.
 
 **Two files are not mine to license.** `openapi.json` is Hevy's own OpenAPI
-document, redistributed unmodified so the corrections have a fixed reference,
-and `openapi.corrected.json` is generated from it. Copyright belongs to Hevy,
-who attach no licence to it. The MIT grant reaches neither them nor the Hevy
-name.
+document, extracted from the Swagger UI bundle and re-serialised, content
+unchanged, so the corrections have a fixed reference.
+`openapi.corrected.json` is generated from it. Copyright belongs to Hevy, who
+attach no licence to it. The MIT grant reaches neither them nor the Hevy name.
 
 The documentation restates Hevy's descriptions in different words and cites the
 source, and sample payloads reuse the spec's own example values.
