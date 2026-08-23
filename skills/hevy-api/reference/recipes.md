@@ -38,13 +38,49 @@ Volume, set counts and a muscle-group split are computed here, not returned.
 
 ```bash
 python3 scripts/hevy.py summary --weeks 4
+python3 scripts/hevy.py summary --weeks 4 --unit lb
 ```
 
 **Skip warmup sets from volume.** Including them inflates the number by roughly
 a fifth and makes week-to-week comparison meaningless.
 
+**Say what unit the figures are in.** The API answers in kilograms whoever is
+asking, and reports nothing about what the account displays
+([objects.md](objects.md#units)). `--unit lb` renames every key as it converts,
+so a `volume_lb` can never be mistaken for a `volume_kg`.
+
 **A null weight change with a latest reading is not a flat weight.** It means
 the window holds no measurement at all.
+
+## Dumbbell weight is the total, and nothing enforces it
+
+Hevy's app tells a user to log the total lifted per rep, so a pair of 10 kg
+dumbbells is entered as 20 kg. Plenty of people enter one hand instead. The API
+stores both the same way, exposes no flag saying which was meant, and an
+account logging per hand reports half the dumbbell volume it really did.
+
+**You cannot tell from the data which one you are looking at.** Weights that
+would have to be per hand, such as an odd half of a rack increment, only appear
+in gyms whose racks carry those sizes, so their absence says nothing and most
+accounts never produce one. Treat the convention as unknown rather than
+inferring it.
+
+One weak hint exists, and it is a hint rather than a finding: a movement logged
+both with a barbell and with dumbbells will show the dumbbell figure at roughly
+half its barbell counterpart, because that is arithmetically what logging one
+hand does. The two lifts differ for other reasons too, so it settles nothing.
+
+**Say which convention a number assumes, and ask when it matters.** That is the
+whole of it. Reporting "31,000 kg of volume, counting dumbbell weights as
+logged" lets the user catch a mismatch in a second, where a bare total does
+not. It matters for a volume figure, a muscle-group split, or a dumbbell lift
+compared against anything else. Trends survive either convention, because
+halving every entry leaves the shape of the curve alone.
+
+**Never correct it yourself.** Do not double a weight, do not adjust a summary
+to compensate, and do not rewrite the sets: which convention they meant is
+theirs to say, and changing the history would mean a `PUT` over every affected
+workout with no undo.
 
 ## Turning a routine into a logged workout
 
@@ -145,6 +181,9 @@ ORDER BY best_e1rm_kg DESC;
 
 `weight_kg * (1 + reps / 30.0)` is the Epley estimate, and it drifts high above
 about ten reps. Filter warmup sets out of anything measuring volume or effort.
+
+The mirror stores what the API returns, so every weight column is kilograms
+however the account displays them ([objects.md](objects.md#units)).
 
 **The mirror is never authoritative for writes.** It is derived, disposable and
 rebuildable with `hevy.py sync --full`, which is what makes querying it safe.

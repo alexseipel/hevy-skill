@@ -12,7 +12,7 @@ Returned inside `Workout.exercises[].sets[]` and `Routine.exercises[].sets[]`.
 | ------------------ | ------------- | ------------------------------------------------ |
 | `index`            | number        | position of the set within the exercise, from 0  |
 | `type`             | string        | `normal`, `warmup`, `dropset` or `failure`       |
-| `weight_kg`        | number, null  | kilograms, whatever the account displays         |
+| `weight_kg`        | number, null  | kilograms, and for dumbbells the total of both   |
 | `reps`             | number, null  |                                                  |
 | `distance_meters`  | number, null  | metres                                           |
 | `duration_seconds` | number, null  |                                                  |
@@ -209,5 +209,34 @@ absent and an empty `workouts` array takes its place
 `bodyweight_assisted_reps`, `duration`, `weight_duration`, `distance_duration`,
 `short_distance_weight`. The type fixes which set fields mean anything: a
 `duration` exercise ignores `weight_kg` and `reps`.
+
+**On a dumbbell exercise, `weight_kg` is the total lifted per rep.** Hevy's app
+says so on the exercise screen, giving a pair of 10 kg dumbbells as 20 kg.
+Nothing in the API enforces it and nothing marks an account that does otherwise
+([recipes.md](recipes.md#dumbbell-weight-is-the-total-and-nothing-enforces-it)).
+
+## Units
+
+**The API is metric everywhere, and silent about what the account displays.**
+
+| Field | Unit |
+| ----- | ---- |
+| `weight_kg`, `lean_mass_kg` | kilograms |
+| `distance_meters` | metres |
+| every `_cm` measurement | centimetres |
+| `duration_seconds` | seconds |
+
+Hevy shows pounds and miles to an account that asks for it, and the app also
+sets units per exercise rather than only globally. **No route reports either
+setting.** `GET /v1/user/info` returns an id, a name and a profile URL, and
+nothing else, so a client cannot discover what its user sees.
+
+The consequence is practical: a number read off the phone will not match the
+API for anyone on imperial units, and neither side is wrong. Convert when you
+quote a figure back, and label it. One pound is 0.45359237 kilograms by
+definition, so a kilogram is about 2.2046 pounds.
+
+`custom_metric` is unrelated to any of this. It is the free-form set field, not
+a measurement system.
 
 **Set type**: `warmup`, `normal`, `failure`, `dropset`.

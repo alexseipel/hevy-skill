@@ -205,6 +205,42 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(top["Example Press (Dumbbell)"]["sets"], 2)
         self.assertEqual(top["Example Press (Dumbbell)"]["volume_kg"], 600)
 
+    def test_to_pounds_converts_and_renames_every_kg_key(self):
+        """A _kg key left in a pound report would be read as kilograms."""
+        summary = {
+            "workouts": 1, "volume_kg": 1000,
+            "volume_by_muscle_group": {"chest": 1000},
+            "top_exercises": {"Bench Press (Barbell)":
+                              {"sets": 2, "volume_kg": 1000, "best_weight_kg": 100}},
+            "body_weight_kg": {"first": (day(7), 80.0), "latest": (day(0), 81.0),
+                               "change_kg": 1.0, "note": None},
+        }
+
+        out = hevy.to_pounds(summary)
+
+        self.assertNotIn("volume_kg", out)
+        self.assertNotIn("body_weight_kg", out)
+        self.assertEqual(out["volume_lb"], 2205)          # 1000 / 0.45359237
+        self.assertEqual(out["volume_by_muscle_group"], {"chest": 2205})
+        exercise = out["top_exercises"]["Bench Press (Barbell)"]
+        self.assertEqual(exercise, {"sets": 2, "volume_lb": 2205,
+                                    "best_weight_lb": 220.5})
+        self.assertEqual(out["body_weight_lb"]["latest"], (day(0), 178.6))
+        self.assertEqual(out["body_weight_lb"]["change_lb"], 2.2)
+        self.assertIsNone(out["body_weight_lb"]["note"])
+        self.assertEqual(out["workouts"], 1, "non-weight fields pass through")
+
+    def test_to_pounds_keeps_a_missing_weight_missing(self):
+        out = hevy.to_pounds({
+            "volume_kg": 0, "volume_by_muscle_group": {}, "top_exercises":
+                {"Plank": {"sets": 1, "volume_kg": 0, "best_weight_kg": None}},
+            "body_weight_kg": {"first": None, "latest": None,
+                               "change_kg": None, "note": "x"}})
+
+        self.assertIsNone(out["top_exercises"]["Plank"]["best_weight_lb"])
+        self.assertIsNone(out["body_weight_lb"]["latest"])
+        self.assertIsNone(out["body_weight_lb"]["change_lb"])
+
     def test_rank_exercises_keeps_a_shared_title_apart(self):
         """Two templates under one display name must not overwrite each other."""
         ranked = hevy.rank_exercises({

@@ -221,6 +221,38 @@ def rank_exercises(per_exercise: dict[str, dict], limit: int = 10) -> dict:
     return ranked_out
 
 
+# The pound is defined as exactly 0.45359237 kg, so this is a definition rather
+# than a measured constant. The API stores kilograms whatever the account's
+# display units are, and reports that preference nowhere (reference/objects.md).
+KG_PER_LB = 0.45359237
+
+
+def to_pounds(summary: dict) -> dict:
+    """Restate a summary in pounds, renaming every _kg key so nothing is misread."""
+    def lb(kg, digits=1):
+        if kg is None:
+            return None
+        pounds = kg / KG_PER_LB
+        return round(pounds, digits) if digits is not None else round(pounds)
+
+    out = dict(summary)
+    out["volume_lb"] = lb(out.pop("volume_kg"), None)
+    out["volume_by_muscle_group"] = {muscle: lb(value, None) for muscle, value
+                                     in out["volume_by_muscle_group"].items()}
+    out["top_exercises"] = {
+        title: {"sets": entry["sets"],
+                "volume_lb": lb(entry["volume_kg"], None),
+                "best_weight_lb": lb(entry["best_weight_kg"])}
+        for title, entry in out["top_exercises"].items()}
+    weight = dict(out.pop("body_weight_kg"))
+    for key in ("first", "latest"):
+        if weight[key]:
+            weight[key] = (weight[key][0], lb(weight[key][1]))
+    weight["change_lb"] = lb(weight.pop("change_kg"), 2)
+    out["body_weight_lb"] = weight
+    return out
+
+
 def training_summary(weeks: int) -> dict:
     """Aggregate recent training the way a person asks about it.
 
@@ -573,6 +605,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("summary", help="Aggregate recent training. Reads workouts "
                                       "and body measurements, computes locally.")
     p.add_argument("--weeks", type=int, default=4, help="1 to 52, default 4")
+    p.add_argument("--unit", choices=("kg", "lb"), default="kg",
+                   help="report weights in kilograms or pounds, default kg. "
+                        "The API stores kilograms either way.")
 
     # Opt-in local mirror. Off unless the user turns it on.
     cache = sub.add_parser("cache", help="Manage the optional local mirror (off by default)")
@@ -773,7 +808,8 @@ def run(args: argparse.Namespace) -> object:
     if cmd == "summary":
         if not 1 <= args.weeks <= 52:
             sys.exit("--weeks must be between 1 and 52")
-        return training_summary(args.weeks)
+        summary = training_summary(args.weeks)
+        return to_pounds(summary) if args.unit == "lb" else summary
 
     raise AssertionError(f"unhandled command {cmd}")
 

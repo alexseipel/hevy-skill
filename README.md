@@ -106,6 +106,8 @@ cached on disk, then matched locally.
 **A training summary the API cannot return.** Volume, working sets and a
 muscle-group split, computed here by joining workouts to the exercise catalogue.
 Warmup sets are excluded, which otherwise inflates volume by roughly a fifth.
+`--unit lb` restates it in pounds, renaming each key as it converts, because the
+API answers in kilograms no matter what the account displays.
 
 **Writes that refuse to run without `--yes`.** The API has no delete route, so a
 create is permanent and an update overwrites.

@@ -182,8 +182,16 @@ current entry, merge your change into it, and send the whole object back.
 - **`rpe` on a set accepts only `6, 7, 7.5, 8, 8.5, 9, 9.5, 10`** or `null`.
 - **Reading an exercise template gives you `equipment`**, while creating one
   takes `equipment_category`.
-- **Weights are kilograms and distances are metres** in every field, whatever
-  the account's display units are.
+- **Every value is metric, and the API never says what the user sees.** Weights
+  are kilograms, distances metres, body measurements centimetres. Hevy displays
+  pounds and miles when the account asks it to, per exercise as well as
+  globally, and no route reports that preference, so **convert before quoting a
+  number back to somebody** ([reference/objects.md](reference/objects.md#units)).
+- **A dumbbell weight is the total lifted per rep**, which is what Hevy's app
+  tells a user to log: a pair of 10 kg dumbbells goes in as 20 kg. People log
+  one hand instead, and nothing in the API distinguishes them, so volume from
+  such an account is understated
+  ([reference/recipes.md](reference/recipes.md#dumbbell-weight-is-the-total-and-nothing-enforces-it)).
 - **There is no delete route** for any resource, and no hidden one under
   `/v1`: the server's `Allow` headers list `GET`, `HEAD`, `POST` and `PUT`
   only. Deleting stays a job for the Hevy app
@@ -281,7 +289,7 @@ three things the API cannot do itself:
 
 ```bash
 python3 scripts/hevy.py templates --search "bench press"   # no search route exists
-python3 scripts/hevy.py summary --weeks 4                  # volume and muscle split
+python3 scripts/hevy.py summary --weeks 4 --unit lb       # volume and muscle split
 python3 scripts/hevy.py workouts --all | jq '.[].title'
 ```
 
