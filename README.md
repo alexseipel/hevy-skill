@@ -132,9 +132,15 @@ python3 skills/hevy-api/scripts/hevy.py sql "
   SELECT substr(start_time,1,7) AS month,
          ROUND(MAX(weight_kg * (1 + reps/30.0)), 1) AS best_e1rm_kg
   FROM performed_sets
-  WHERE exercise_title LIKE 'Bench Press%' AND set_type != 'warmup'
+  WHERE exercise_template_id = '79D0BB3A'
+    AND set_type != 'warmup' AND reps > 0
   GROUP BY month ORDER BY month DESC"
 ```
+
+`79D0BB3A` is Bench Press (Barbell), from `templates --search`. A title looks
+like the obvious filter and is not one: `LIKE 'Bench Press%'` spans six
+templates, including the close-grip variant Hevy files under triceps, and folds
+them into one number belonging to no exercise.
 
 `cache status` reports what is stored and how fresh it is. `cache clear` deletes
 the mirror and the cached exercise catalogue together.
@@ -147,8 +153,8 @@ which is why they are separate opt-ins rather than one switch.
 `sql` syncs before it queries, so there is no path that reads a stale mirror by
 accident. It takes `SELECT` and `WITH` only, because writes belong to the API.
 
-A several-hundred-workout account backfills in about twelve seconds and produces roughly
-thousands of set rows. Later syncs take about one second when nothing has changed.
+A few hundred workouts backfill in about twelve seconds. Later syncs take
+about one second when nothing has changed.
 
 **One thing is cached without being asked**: the exercise catalogue, as a JSON
 file, because `--search` cannot work without it. It is a lookup table rather

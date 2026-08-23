@@ -179,6 +179,44 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(len(self.api.calls_to("/v1/workouts")), 1)
         self.assertEqual(len(self.api.calls_to("/v1/body_measurements")), 1)
 
+    def test_training_summary_groups_a_renamed_exercise_once(self):
+        """A title is a display name. Two spellings of one template are one row."""
+        self.write_catalogue([{"id": "T1", "primary_muscle_group": "legs",
+                               "title": "Example Press (Dumbbell)"}])
+        def workout(wid, title):
+            return {"id": wid, "title": "Legs", "start_time": offset_ts(1),
+                    "end_time": (hevy.parse_timestamp(offset_ts(1))
+                                 + dt.timedelta(hours=1)).isoformat(),
+                    "exercises": [{"title": title, "exercise_template_id": "T1",
+                                   "sets": [{"type": "normal",
+                                             "weight_kg": 30, "reps": 10}]}]}
+        # The catalogue renamed T1, so the older workout kept the old title.
+        self.api.pages["/v1/workouts"] = {1: {"page": 1, "page_count": 1, "workouts": [
+            workout("w1", "Example Press (Dumbbell)"),
+            workout("w0", "Example Press"),
+        ]}}
+        self.api.pages["/v1/body_measurements"] = {
+            1: {"page": 1, "page_count": 1, "body_measurements": []}}
+
+        top = hevy.training_summary(weeks=1)["top_exercises"]
+
+        self.assertEqual(list(top), ["Example Press (Dumbbell)"],
+                         "one template is one row, under its current title")
+        self.assertEqual(top["Example Press (Dumbbell)"]["sets"], 2)
+        self.assertEqual(top["Example Press (Dumbbell)"]["volume_kg"], 600)
+
+    def test_rank_exercises_keeps_a_shared_title_apart(self):
+        """Two templates under one display name must not overwrite each other."""
+        ranked = hevy.rank_exercises({
+            "T1": {"title": "Bench Press", "sets": 3,
+                   "volume_kg": 900.0, "best_weight_kg": 100},
+            "T2": {"title": "Bench Press", "sets": 1,
+                   "volume_kg": 100.0, "best_weight_kg": 50},
+        })
+
+        self.assertEqual(list(ranked), ["Bench Press", "Bench Press [T2]"])
+        self.assertEqual(ranked["Bench Press"]["volume_kg"], 900)
+
     def test_training_summary_names_a_stale_weight(self):
         self.write_catalogue([])
         self.api.pages["/v1/workouts"] = {

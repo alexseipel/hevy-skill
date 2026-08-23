@@ -112,8 +112,35 @@ workout and exercise, with `volume_kg` precomputed:
 SELECT substr(start_time, 1, 7) AS month,
        ROUND(MAX(weight_kg * (1 + reps / 30.0)), 1) AS best_e1rm_kg
 FROM performed_sets
-WHERE exercise_title LIKE 'Bench Press%' AND set_type != 'warmup' AND reps > 0
+WHERE exercise_template_id = '79D0BB3A'   -- Bench Press (Barbell)
+  AND set_type != 'warmup' AND reps > 0
 GROUP BY month ORDER BY month DESC;
+```
+
+**Filter on `exercise_template_id`, never on `exercise_title`.** A title looks
+like the obvious key and is not one. `LIKE 'Bench Press%'` matches six
+templates, mixing barbell with dumbbell, which is loaded per hand, and with the
+close-grip variant Hevy files under triceps. `MAX()` over that returns one
+number belonging to no exercise. Widening the pattern to `%Bench Press%` makes
+it worse, at fourteen templates including every incline and decline. Titles
+drift as well ([observed.md](observed.md#an-exercise-title-is-a-display-name-not-an-identity)).
+
+Look the id up first, then query it:
+
+```bash
+python3 scripts/hevy.py templates --search "bench press"
+```
+
+To compare the variants rather than pick one, group by the id and label the
+rows with the title:
+
+```sql
+SELECT exercise_title, exercise_template_id,
+       ROUND(MAX(weight_kg * (1 + reps / 30.0)), 1) AS best_e1rm_kg
+FROM performed_sets
+WHERE exercise_title LIKE 'Bench Press%' AND set_type != 'warmup' AND reps > 0
+GROUP BY exercise_template_id
+ORDER BY best_e1rm_kg DESC;
 ```
 
 `weight_kg * (1 + reps / 30.0)` is the Epley estimate, and it drifts high above

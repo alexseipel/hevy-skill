@@ -103,8 +103,9 @@ recorded is **absent**, not `null`, so code that reads
 **Strip `id` and `created_at` before sending the entry back to
 `PUT /v1/body_measurements/{date}`.** They are not part of `PutBodyMeasurement`.
 
-Note the float: `80.50000000000045` is stored as a binary float, so round for
-display rather than assuming the value you sent comes back unchanged.
+Note the float: `80.5` went in and `80.50000000000045` came back, because the
+value is stored as a binary float. Round for display rather than assuming what
+you sent comes back unchanged.
 
 ## 8. `routine_id` is nullable
 
@@ -202,11 +203,31 @@ your window covers the window without paging the whole account.
 
 **`/v1/routines` does not.** It groups by `folder_id`, one contiguous run per
 folder, in ascending folder id, which is the order the folders were created in.
-Routines with no folder come last. Measured on 2026-08-23 on an account with
-many routines across several folders: the runs matched the folder ids in order.
+Routines with no folder come last. Measured on 2026-08-23, over several
+folders of very different sizes, and the runs matched the folder ids in order
+every time.
 
 A routine created today therefore lands wherever its folder sits, not at the
 top, so there is no early stop for this route. Page it all, or fetch by id.
+
+## An exercise title is a display name, not an identity
+
+`exercise_template_id` identifies an exercise. The `title` returned beside it
+is what the app shows, and the two drift apart.
+
+Hevy renames a template from time to time, and a workout logged before the
+rename keeps the title it was written with. Reading such a workout returns the
+old title next to an id whose catalogue entry now reads differently, so the
+same exercise arrives under two names.
+
+`/v1/exercise_history/{exerciseTemplateId}` shows which of the two the API
+treats as the identity: it returns no title at all, only the id.
+
+Titles also share prefixes. `Bench Press` is six separate templates once
+equipment is counted, and one of them, `Bench Press - Close Grip (Barbell)`,
+is a triceps exercise rather than a chest one. Group and filter on
+`exercise_template_id`, and match on the title only to find that id in the
+first place ([recipes.md](recipes.md#finding-an-exercise-by-name)).
 
 ## Write behaviour
 
@@ -231,10 +252,9 @@ The folder case was measured: five folders at indexes 0 to 4 became indexes 1
 to 5, keeping their relative order, and the new folder took index 0. There is
 no folder update or delete route, so the API cannot put the order back.
 
-Removing the test data produced the one event nobody had seen. The app-side
-deletion surfaced in `/v1/workouts/events` as `{"type": "deleted", "id": "…",
-"deleted_at": "2024-08-14T23:19:17.142Z"}`: all three fields present, with
-`deleted_at` in the `Z`-millisecond format. The feed retains deletions, so
+Deleting a workout in the app surfaces in `/v1/workouts/events` as
+`{"type": "deleted", "id": "…", "deleted_at": "…"}`: all three fields present,
+with `deleted_at` in the `Z`-millisecond format. The feed retains deletions, so
 `verify_live.py` pins that shape on any account that holds one.
 
 **A read response cannot be written back as it is.** The write schemas reject
@@ -261,7 +281,7 @@ header, which settles the question more strongly than probing. Checked on
 | `/v1/workouts/{workoutId}`, `/v1/routines/{routineId}`, `/v1/body_measurements/{date}` | `GET,HEAD,PUT` |
 | `/v1/routine_folders/{folderId}`, `/v1/exercise_templates/{exerciseTemplateId}` | `GET,HEAD` |
 
-No `DELETE` and no `PATCH` is registered anywhere, and folders and exercise
+No `DELETE` and no `PATCH` is registered under `/v1`, and folders and exercise
 templates cannot even be updated. Method overrides (`X-HTTP-Method-Override`,
 `?_method=DELETE`) and guessed paths (`/delete` and `/archive` suffixes,
 `/v2/`, `/v1/me`, `/v1/account`, `/v1/routines/count`) all return `404`.
@@ -269,6 +289,21 @@ templates cannot even be updated. Method overrides (`X-HTTP-Method-Override`,
 
 Emptying is not a back door either: a routine must keep at least one exercise,
 so nothing can be hollowed out as a pseudo-delete.
+
+Hevy's own apps do delete, through a separate API outside `/v1` that a
+developer key cannot authenticate against. Nothing there is reachable with a
+key, so deleting stays a job for the app.
+
+## A write can reach the mobile app late
+
+Something created through `/v1` shows in the web interface at once and can take
+longer to appear in the mobile app. Observed twice on 2026-08-22, with custom
+exercises and with a routine, each visible on the web while the phone showed
+neither.
+
+Whether the app is holding a cached copy or the write never signalled it is
+undetermined. The data was on the server both times, so **check the web
+interface before concluding a write failed.**
 
 ## The `403` limits are free-plan limits
 
@@ -278,8 +313,7 @@ Hevy's [Pro subscription page](https://help.hevyapp.com/hc/en-us/articles/351197
 puts both limits on the free plan, at **4 routines and 7 custom exercises**,
 with Pro lifting each, and the API's own description says it "is only
 available to Hevy Pro users". An account with active Pro therefore cannot
-reach either branch. This one holds many routines, well past the free cap,
-with no `403`.
+reach either branch. A Pro account well past the free cap returned no `403`.
 
 What a key does when its Pro subscription lapses is not verified. Treat the
 status as a plan problem rather than something to retry, not as impossible.
@@ -295,3 +329,7 @@ returns has not been measured.
 - **A key whose Pro subscription has lapsed.** The `403` reasoning above
   stands on Pro entitlement tracking the key, and nobody has watched a key
   outlive its plan.
+- **The shape of the rate limit.** Reads in quick succession can return a
+  `429`, which no Hevy documentation mentions. The threshold, the window and
+  whether either varies by route are unmeasured, so retry with backoff rather
+  than to a schedule.

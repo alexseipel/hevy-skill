@@ -162,7 +162,7 @@
     },
     {
       "id": "since-default-dropped",
-      "why": "The spec defaults since to the epoch, but omitting it returns nothing: 0 events and page_count 1 on an account whose epoch backfill has hundreds of workouts, observed 2026-08-23. Whether the server substitutes a recent default or matches nothing was not determined. The false default is dropped so a generated client sends since explicitly.",
+      "why": "The spec defaults since to the epoch, but omitting it returns nothing: 0 events and page_count 1 on an account with hundreds of workouts, observed 2026-08-23. Whether the server substitutes a recent default or matches nothing was not determined. The false default is dropped so a generated client sends since explicitly.",
       "op": "drop-parameter-default",
       "route": "/v1/workouts/events",
       "method": "get",

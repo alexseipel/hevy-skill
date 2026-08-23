@@ -16,6 +16,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -27,12 +28,21 @@ results: list[tuple[bool, str, str]] = []
 def call(path: str, **params) -> tuple[int, object]:
     url = BASE + path + ("?" + urllib.parse.urlencode(params) if params else "")
     req = urllib.request.Request(url, headers={"api-key": os.environ["HEVY_API_KEY"]})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as response:
-            raw = response.read().decode()
-            return response.status, (json.loads(raw) if raw.strip() else None)
-    except urllib.error.HTTPError as exc:
-        return exc.code, exc.read().decode()[:200]
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                raw = response.read().decode()
+                return response.status, (json.loads(raw) if raw.strip() else None)
+        except urllib.error.HTTPError as exc:
+            # A rate limit is a throttled run, not a stale claim, and reporting
+            # it as a failure points at the wrong line of documentation. The
+            # one 429 seen so far cleared 45 seconds later, and its window is
+            # unmeasured (reference/observed.md#still-not-verified).
+            if exc.code == 429 and attempt < 2:
+                time.sleep(15 * (attempt + 1))
+                continue
+            return exc.code, exc.read().decode()[:200]
+    raise AssertionError("unreachable")
 
 
 def check(claim: str, expected, actual) -> None:
@@ -149,6 +159,12 @@ def main() -> int:
         _, paged = call(f"/v1/exercise_history/{template_id}", page=1, pageSize=1)
         check("exercise history ignores paging",
               len(history["exercise_history"]), len(paged["exercise_history"]))
+        if history["exercise_history"]:
+            row = history["exercise_history"][0]
+            check("exercise history keys on the template id", True,
+                  "exercise_template_id" in row)
+            check("exercise history carries no exercise title", [],
+                  [k for k in row if k.endswith("title") and k != "workout_title"])
 
     _, measurements = call("/v1/body_measurements", pageSize=1)
     if measurements.get("body_measurements"):

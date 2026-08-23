@@ -184,9 +184,19 @@ current entry, merge your change into it, and send the whole object back.
   takes `equipment_category`.
 - **Weights are kilograms and distances are metres** in every field, whatever
   the account's display units are.
-- **There is no delete route** for any resource, and no hidden one: the
-  server's `Allow` headers list `GET`, `HEAD`, `POST` and `PUT` only
+- **There is no delete route** for any resource, and no hidden one under
+  `/v1`: the server's `Allow` headers list `GET`, `HEAD`, `POST` and `PUT`
+  only. Deleting stays a job for the Hevy app
   ([reference/observed.md](reference/observed.md#no-hidden-delete-route)).
+- **A write can reach the mobile app late.** It shows in the web interface at
+  once while the phone still shows nothing, which looks like a cache on the
+  app's side. Check the web interface before concluding a write failed
+  ([reference/observed.md](reference/observed.md#a-write-can-reach-the-mobile-app-late)).
+- **An exercise title is a display name, not an identity.** Titles share
+  prefixes, so a `Bench Press%` filter spans six different templates, and a
+  title stored in an old workout can differ from the catalogue's current one.
+  Group, filter and join on `exercise_template_id`
+  ([reference/observed.md](reference/observed.md#an-exercise-title-is-a-display-name-not-an-identity)).
 - **The two documented `403` limits are free-plan limits**, at 4 routines and
   7 custom exercises. The API is Pro-only, so an active Pro key cannot reach
   either branch, and a lapsed key is unverified

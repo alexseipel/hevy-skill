@@ -205,6 +205,22 @@ def parse_timestamp(value: str) -> dt.datetime:
     return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def rank_exercises(per_exercise: dict[str, dict], limit: int = 10) -> dict:
+    """Rank template-id-keyed totals by volume and label them with their title."""
+    ranked = sorted(per_exercise.items(), key=lambda kv: -kv[1]["volume_kg"])
+    ranked_out: dict[str, dict] = {}
+    for template_id, entry in ranked[:limit]:
+        label = entry["title"]
+        # Two templates can carry one display name, and a title-keyed dict
+        # would silently drop the second.
+        if label in ranked_out:
+            label = f"{label} [{template_id}]"
+        ranked_out[label] = {"sets": entry["sets"],
+                             "volume_kg": round(entry["volume_kg"]),
+                             "best_weight_kg": entry["best_weight_kg"]}
+    return ranked_out
+
+
 def training_summary(weeks: int) -> dict:
     """Aggregate recent training the way a person asks about it.
 
@@ -236,9 +252,13 @@ def training_summary(weeks: int) -> dict:
         for exercise in workout.get("exercises", []):
             template = by_id.get(exercise.get("exercise_template_id"), {})
             muscle = template.get("primary_muscle_group", "unknown")
+            # Keyed on the template id: a title is a display name, and one
+            # renamed in the catalogue leaves old workouts carrying the old
+            # title, which splits an exercise in two (reference/observed.md).
             entry = per_exercise.setdefault(
-                exercise.get("title", "unknown"),
-                {"sets": 0, "volume_kg": 0.0, "best_weight_kg": None})
+                exercise.get("exercise_template_id") or exercise.get("title", "unknown"),
+                {"title": template.get("title") or exercise.get("title", "unknown"),
+                 "sets": 0, "volume_kg": 0.0, "best_weight_kg": None})
             for one in exercise.get("sets", []):
                 if one.get("type") == "warmup":
                     continue
@@ -284,10 +304,7 @@ def training_summary(weeks: int) -> dict:
         "volume_by_muscle_group": dict(
             sorted(((k, round(v)) for k, v in per_muscle.items()),
                    key=lambda kv: -kv[1])),
-        "top_exercises": dict(sorted(
-            ((k, {**v, "volume_kg": round(v["volume_kg"])})
-             for k, v in per_exercise.items()),
-            key=lambda kv: -kv[1]["volume_kg"])[:10]),
+        "top_exercises": rank_exercises(per_exercise),
         "body_weight_kg": {
             "first": weights[-1] if weights else None,
             "latest": weights[0] if weights else (all_weights[0] if stale else None),
