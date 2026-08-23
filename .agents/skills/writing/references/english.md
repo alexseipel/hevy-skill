@@ -14,10 +14,11 @@ hardest on, so it produces the densest, most recognisable tells.
 
 ## The tells
 
-**Words.** delve, tapestry, landscape, realm, robust, seamless, leverage (as a
-verb), utilise, foster, unlock, harness, elevate, streamline, empower,
-comprehensive, holistic, cutting-edge, game-changer, ensure (where "make sure"
-or nothing would do).
+**Words**, each a literal string worth grepping for: `delve`, `tapestry`,
+`landscape`, `realm`, `robust`, `seamless`, `leverage` (as a verb), `utilise`,
+`foster`, `unlock`, `harness`, `elevate`, `streamline`, `empower`,
+`comprehensive`, `holistic`, `cutting-edge`, `game-changer`, and `ensure` where
+"make sure" or nothing would do.
 
 **Phrases.** "it's worth noting", "it's important to note", "in today's
 world", "plays a crucial role", "navigate the complexities", "at its core",
