@@ -45,6 +45,30 @@ def call(path: str, **params) -> tuple[int, object]:
     raise AssertionError("unreachable")
 
 
+def call_dict(path: str, **params) -> dict:
+    """One call whose caller needs a dict body.
+
+    A non-dict body records one failure and reads as empty, so a transient
+    server error fails the claims that needed this call, not the whole run.
+    """
+    status, body = call(path, **params)
+    if isinstance(body, dict):
+        return body
+    results.append((False, f"{path} answered a dict", f"got {status} {str(body)[:80]!r}"))
+    return {}
+
+
+def bad_key_probe() -> tuple[int, str, str]:
+    """Status, content type and body for a request carrying a wrong key."""
+    req = urllib.request.Request(BASE + "/v1/user/info", headers={"api-key": "invalid"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            return response.status, response.headers.get("Content-Type", ""), ""
+    except urllib.error.HTTPError as exc:
+        content_type = exc.headers.get("Content-Type", "") or ""
+        return exc.code, content_type, exc.read().decode().strip()
+
+
 def check(claim: str, expected, actual) -> None:
     results.append((expected == actual, claim, f"expected {expected!r}, got {actual!r}"))
 
@@ -90,9 +114,9 @@ def main() -> int:
         if page_count and page_count > 1:
             check(f"{path} default pageSize is {expected}", expected, got)
 
-    _, unfiltered = call("/v1/workouts/events")
-    _, backfill = call("/v1/workouts/events", pageSize=10, **epoch)
-    if isinstance(backfill, dict) and backfill.get("page_count", 0) > 1:
+    unfiltered = call_dict("/v1/workouts/events")
+    backfill = call_dict("/v1/workouts/events", pageSize=10, **epoch)
+    if backfill.get("page_count", 0) > 1:
         check("omitting since is not an epoch backfill", True,
               unfiltered.get("page_count", 0) < backfill["page_count"])
 
@@ -104,8 +128,8 @@ def main() -> int:
     # The feed retains deletions, so any account that has ever deleted a
     # workout pins the deleted-event shape. Deletions are rare, so one page
     # of recent events is enough to find the latest.
-    events = backfill.get("events", []) if isinstance(backfill, dict) else []
-    removed = next((e for e in events if e.get("type") == "deleted"), None)
+    removed = next((e for e in backfill.get("events", [])
+                    if e.get("type") == "deleted"), None)
     if removed:
         check("a deleted event carries type, id and deleted_at", True,
               {"type", "id", "deleted_at"} <= set(removed))
@@ -120,10 +144,10 @@ def main() -> int:
     # Guarded like the blocks below: an account with no workouts skips these
     # rather than crashing on an empty list.
     exercise = None
-    _, listing = call("/v1/workouts", pageSize=1)
+    listing = call_dict("/v1/workouts", pageSize=1)
     if listing.get("workouts"):
         workout_id = listing["workouts"][0]["id"]
-        _, workout = call(f"/v1/workouts/{workout_id}")
+        workout = call_dict(f"/v1/workouts/{workout_id}")
         check("GET /v1/workouts/{id} is not wrapped", False, list(workout.keys()) == ["workout"])
         check("the workout response has no is_private", False, "is_private" in workout)
         check("workouts carry routine_id", True, "routine_id" in listing["workouts"][0])
@@ -139,47 +163,60 @@ def main() -> int:
             check("workout exercises use superset_id", True, "superset_id" in exercise)
             check("workout exercises do not use supersets_id", False, "supersets_id" in exercise)
 
-    _, routines = call("/v1/routines", pageSize=1)
+    routines = call_dict("/v1/routines", pageSize=1)
     if routines.get("routines"):
-        _, one = call(f"/v1/routines/{routines['routines'][0]['id']}")
+        one = call_dict(f"/v1/routines/{routines['routines'][0]['id']}")
         check("GET /v1/routines/{id} is wrapped in routine", ["routine"], list(one.keys()))
-        rex = one["routine"]["exercises"][0]
-        check("routine exercises use superset_id", True, "superset_id" in rex)
-        check("rest_seconds is an integer", "int", type(rex.get("rest_seconds")).__name__)
-        check("routine sets carry rep_range", True, "rep_range" in rex["sets"][0])
+        rexes = one.get("routine", {}).get("exercises", [])
+        if rexes:
+            rex = rexes[0]
+            check("routine exercises use superset_id", True, "superset_id" in rex)
+            check("rest_seconds is an integer", "int", type(rex.get("rest_seconds")).__name__)
+            # A routine exercise can hold zero sets, so the shape check skips one that does.
+            if rex.get("sets"):
+                check("routine sets carry rep_range", True, "rep_range" in rex["sets"][0])
 
-    _, templates = call("/v1/exercise_templates", pageSize=1)
-    template = templates["exercise_templates"][0]
-    check("templates use equipment", True, "equipment" in template)
-    check("templates do not use equipment_category", False, "equipment_category" in template)
+    templates = call_dict("/v1/exercise_templates", pageSize=1)
+    if templates.get("exercise_templates"):
+        template = templates["exercise_templates"][0]
+        check("templates use equipment", True, "equipment" in template)
+        check("templates do not use equipment_category", False, "equipment_category" in template)
 
     if exercise:
         template_id = exercise["exercise_template_id"]
-        _, history = call(f"/v1/exercise_history/{template_id}")
-        _, paged = call(f"/v1/exercise_history/{template_id}", page=1, pageSize=1)
-        check("exercise history ignores paging",
-              len(history["exercise_history"]), len(paged["exercise_history"]))
-        if history["exercise_history"]:
+        history = call_dict(f"/v1/exercise_history/{template_id}")
+        paged = call_dict(f"/v1/exercise_history/{template_id}", page=1, pageSize=1)
+        if "exercise_history" in history and "exercise_history" in paged:
+            check("exercise history ignores paging",
+                  len(history["exercise_history"]), len(paged["exercise_history"]))
+        if history.get("exercise_history"):
             row = history["exercise_history"][0]
             check("exercise history keys on the template id", True,
                   "exercise_template_id" in row)
             check("exercise history carries no exercise title", [],
                   [k for k in row if k.endswith("title") and k != "workout_title"])
 
-    _, measurements = call("/v1/body_measurements", pageSize=1)
+    measurements = call_dict("/v1/body_measurements", pageSize=10)
     if measurements.get("body_measurements"):
         entry = measurements["body_measurements"][0]
         check("measurements carry an undocumented id", True, "id" in entry)
         check("measurements carry created_at", True, "created_at" in entry)
-        check("unrecorded measurement fields are omitted", False, "neck_cm" in entry)
+        # Any recorded field set would break this, where a fixed field name
+        # only breaks on accounts that happen to record it.
+        check("unrecorded measurement fields are omitted, not null", True,
+              all(value is not None for value in entry.values()))
+    dates = [m["date"] for m in measurements.get("body_measurements", [])]
+    if len(dates) > 1:
+        check("/v1/body_measurements lists newest first", True,
+              dates == sorted(dates, reverse=True))
     check("a missing measurement date is 404", 404, call("/v1/body_measurements/1990-01-01")[0])
 
-    _, folders = call("/v1/routine_folders", pageSize=1)
+    folders = call_dict("/v1/routine_folders", pageSize=1)
     if folders.get("routine_folders"):
         check("folder ids are integers", "int",
               type(folders["routine_folders"][0]["id"]).__name__)
 
-    _, page_one = call("/v1/workouts", pageSize=10)
+    page_one = call_dict("/v1/workouts", pageSize=10)
     starts = [w["start_time"] for w in page_one.get("workouts", [])]
     if len(starts) > 1:
         check("/v1/workouts lists newest first", True,
@@ -211,6 +248,14 @@ def main() -> int:
 
     check("an unknown workout id is 404", 404,
           call("/v1/workouts/00000000-0000-0000-0000-000000000000")[0])
+    # The spec documents only 200 and 400 on this route (observed.md row 15).
+    check("an unknown routine id is 404", 404,
+          call("/v1/routines/00000000-0000-0000-0000-000000000000")[0])
+
+    status, content_type, body = bad_key_probe()
+    check("a wrong key is 401", 401, status)
+    check("the 401 body is the plain string InvalidApiKey", "InvalidApiKey", body)
+    check("the 401 is served as text/html", True, content_type.startswith("text/html"))
 
     # The Allow header is the server enumerating its own registered methods,
     # which settles "is there a hidden delete" more strongly than probing.

@@ -119,9 +119,16 @@ def apply_patch(document: dict, patch: dict) -> None:
                           for k, v in target.items()}
 
     elif op == "merge":
-        if not isinstance(container.get(key), dict):
+        target = container.get(key)
+        if not isinstance(target, dict):
             raise PatchError(f"{pid}: '{patch['pointer']}' is not an object")
-        container[key].update(patch["value"])
+        # Merged keys must be absent upstream, or the patch would silently
+        # overwrite whatever Hevy started saying there.
+        clashes = [k for k in patch["value"] if k in target]
+        if clashes:
+            raise PatchError(f"{pid}: {', '.join(clashes)} already set upstream. "
+                             f"Hevy may have fixed this; re-check the patch.")
+        target.update(patch["value"])
 
     else:
         raise PatchError(f"{pid}: unknown op '{op}'")

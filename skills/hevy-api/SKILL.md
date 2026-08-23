@@ -121,7 +121,7 @@ Exceeding the cap returns `400`. Loop while `page <= page_count`, reading
 
 **A `401` is not JSON.** It is the plain string `InvalidApiKey` with
 `Content-Type: text/html`, so check the status before parsing. Observed
-2026-08-22, not documented.
+2026-08-22, not documented ([reference/observed.md](reference/observed.md)).
 
 ## Syncing a local cache
 
@@ -160,7 +160,7 @@ every omitted field to `null`. Read, merge, send the whole object back.
 - **A superset id can be `0`.** It indexes supersets within one workout, so
   `if (superset_id)` drops the first superset of every workout. Test against
   `null`.
-- **The published spec is wrong in fourteen places**, including the superset
+- **The published spec is wrong in sixteen places**, including the superset
   field name and four `pageSize` defaults
   ([reference/observed.md](reference/observed.md)).
 - **`GET /v1/routines/{routineId}` wraps its result in `{routine: …}`**, while

@@ -24,7 +24,7 @@ Over budget means the file is doing two jobs. Split it or cut it, and never
 delete a fact to hit a number.
 
 One file stands outside this. `reference/observed.md` runs to roughly 1,400
-words because it catalogues fourteen spec disagreements, and splitting it would
+words because it catalogues sixteen spec disagreements, and splitting it would
 scatter corrections a reader needs together.
 
 ## README.md

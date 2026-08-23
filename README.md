@@ -7,7 +7,7 @@ An agent skill for the [Hevy](https://hevy.com) training API: every endpoint of
 client to call them with.
 
 All 22 operations are covered, and a CI check proves it. Every documented
-behaviour was verified against a live account, which turned up **fourteen
+behaviour was verified against a live account, which turned up **sixteen
 places where Hevy's published OpenAPI spec is wrong**
 ([observed.md](skills/hevy-api/reference/observed.md)). This skill documents
 what the API does, not what the spec says.
@@ -77,7 +77,7 @@ command.
 
 The upstream spec declares no server and no security scheme, so a generated
 client knows neither where to send a request nor how to authenticate. One
-command re-pins Hevy's document from the Swagger UI bundle and re-applies all 26
+command re-pins Hevy's document from the Swagger UI bundle and re-applies all 27
 corrections from [spec-patches.json](skills/hevy-api/spec-patches.json):
 
 ```bash

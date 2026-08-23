@@ -25,7 +25,7 @@
           "type": "apiKey",
           "in": "header",
           "name": "api-key",
-          "description": "Issued at https://hevy.com/settings?developer. Hevy Pro only."
+          "description": "Issued at https://hevy.com/settings?developer. Hevy Pro only. A missing or wrong key returns 401 with the plain-text body InvalidApiKey served as text/html, not JSON. Observed 2026-08-22."
         }
       }
     },
@@ -300,6 +300,15 @@
       "pointer": "/paths/~1v1~1body_measurements/post/responses",
       "from": "200",
       "to": "201"
+    },
+    {
+      "id": "routine-get-404",
+      "why": "Every other single-item GET documents a 404. This route documents only 200 and 400, while an unknown routine id returns 404 like the rest. Observed 2026-08-23.",
+      "op": "add",
+      "pointer": "/paths/~1v1~1routines~1{routineId}/get/responses/404",
+      "value": {
+        "description": "No routine with this id on this account"
+      }
     },
     {
       "id": "events-not-required-when-empty",

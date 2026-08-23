@@ -2,7 +2,7 @@
   "openapi": "3.0.0",
   "info": {
     "title": "Hevy API Docs",
-    "description": "\n      Welcome to Hevy's public API! We're just starting to roll this out and depending on your\n      feedback, we'll be adding more features and endpoints. Also, we make no guarantees that \n      we won't completely change the structure or abandon the project entirely so use it at\n      your own risk. Currently, this API is only available to Hevy Pro users. You can get your \n      key on our web app at https://hevy.com/settings?developer. If you have any questions,\n      please reach out to pavel@hevyapp.com \ud83e\udd1d.\n\n      CORRECTED COPY. 26 corrections verified against the live API on 2026-08-23, plus 404 responses on 5 list routes. The upstream document is openapi.json, and the corrections are listed in spec-patches.json and reference/observed.md.\n      ",
+    "description": "\n      Welcome to Hevy's public API! We're just starting to roll this out and depending on your\n      feedback, we'll be adding more features and endpoints. Also, we make no guarantees that \n      we won't completely change the structure or abandon the project entirely so use it at\n      your own risk. Currently, this API is only available to Hevy Pro users. You can get your \n      key on our web app at https://hevy.com/settings?developer. If you have any questions,\n      please reach out to pavel@hevyapp.com \ud83e\udd1d.\n\n      CORRECTED COPY. 27 corrections verified against the live API on 2026-08-23, plus 404 responses on 5 list routes. The upstream document is openapi.json, and the corrections are listed in spec-patches.json and reference/observed.md.\n      ",
     "version": "0.0.1",
     "x-corrections-verified-at": "2026-08-23",
     "x-corrections-source": "spec-patches.json",
@@ -518,6 +518,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "No routine with this id on this account"
           }
         }
       },
@@ -2519,7 +2522,7 @@
         "type": "apiKey",
         "in": "header",
         "name": "api-key",
-        "description": "Issued at https://hevy.com/settings?developer. Hevy Pro only."
+        "description": "Issued at https://hevy.com/settings?developer. Hevy Pro only. A missing or wrong key returns 401 with the plain-text body InvalidApiKey served as text/html, not JSON. Observed 2026-08-22."
       }
     }
   },

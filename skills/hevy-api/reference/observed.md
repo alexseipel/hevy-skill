@@ -1,7 +1,7 @@
 # Where the spec is wrong
 
 The published [openapi.json](../openapi.json) disagrees with the live API in
-fourteen places. Every read-only row re-runs with `scripts/verify_live.py`,
+sixteen places. Every read-only row re-runs with `scripts/verify_live.py`,
 last on **2026-08-23**. Rows 11 to 13 need writes and were verified once on the
 same date ([write behaviour](#write-behaviour)).
 
@@ -32,6 +32,8 @@ where to send a request nor how to authenticate.
 | 12 | `POST /v1/exercise_templates` | `{"id": <integer>}` | **a bare UUID string as `text/html`** |
 | 13 | `POST /v1/body_measurements` | `200` | **`201`** |
 | 14 | `GET /v1/workouts/events` with nothing to report | `events: []` | **a `workouts` key instead**, and no `events` at all |
+| 15 | `GET /v1/routines/{routineId}`, unknown id | `200` and `400` only | **`404`**, like every other single-item GET |
+| 16 | a wrong or missing key | no `401` documented | **the plain string `InvalidApiKey` as `text/html`**, never JSON |
 
 ## 1. The superset field is not renamed
 
@@ -185,6 +187,19 @@ nothing to report it is absent, replaced by a differently named empty array:
 
 So `payload["events"]` raises exactly when a sync has caught up, the common
 case for a scheduled poll. Read `payload.get("events", [])`.
+
+## 15. An unknown routine id is 404
+
+Every sibling single-item GET documents a `404`, and `PUT` on this same route
+does too. The spec gives the GET `200` and `400` only, while the API answers
+`404` for an unknown id like the rest. Observed 2026-08-23.
+
+## 16. A 401 is plain text
+
+A missing or wrong key returns the string `InvalidApiKey` with
+`Content-Type: text/html`, on every route. The spec documents no `401` at all,
+so check the status before parsing the body. Observed 2026-08-22; the corrected
+spec carries this on its security scheme.
 
 ## Ordering, which the spec never states
 
