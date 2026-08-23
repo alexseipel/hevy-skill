@@ -101,10 +101,10 @@ curl -s "https://api.hevyapp.com/v1/workouts/events?since=2024-08-01T00:00:00Z&p
   { "type": "deleted", "id": "efe6801c-…", "deleted_at": "2021-09-13T12:00:00Z" } ] }
 ```
 
-**Read the array as `payload.get("events", [])`.** When the feed has nothing
-to report the key is missing entirely, replaced by an empty `workouts` array
-([observed.md](observed.md#14-an-empty-events-feed-answers-with-the-wrong-key)),
-so indexing it directly throws exactly when a sync has caught up.
+**Read the array as `payload.get("events", [])`.** With nothing to report the
+key is missing entirely, replaced by an empty `workouts` array
+([observed.md](observed.md#14-an-empty-events-feed-answers-with-the-wrong-key)).
+Indexing it directly throws exactly when a sync has caught up.
 
 Branch on `type`: `updated` carries a full `workout` to upsert, `deleted`
 carries only an `id` to remove. This is the only route that reports deletions,

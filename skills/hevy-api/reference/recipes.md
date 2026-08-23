@@ -1,14 +1,14 @@
 # Recipes
 
-The API answers one resource at a time. Everything people actually ask for
-spans several calls, and the joins have to happen client-side. Each recipe
-below is implemented in [../scripts/hevy.py](../scripts/hevy.py), so read the
-algorithm here and call the command when a shell is available.
+The API answers one resource at a time, so anything people ask for spans
+several calls and joins client-side. Each recipe is implemented in
+[../scripts/hevy.py](../scripts/hevy.py): read the algorithm here, call the
+command when a shell is available.
 
 ## Finding an exercise by name
 
 There is no search route. The catalogue is about 500 entries over 5 pages at
-`pageSize=100`, and it changes only when Hevy ships new exercises.
+`pageSize=100`, changing only when Hevy ships new exercises.
 
 1. Page `/v1/exercise_templates` once at `pageSize=100`.
 2. Cache the result on disk.
@@ -20,9 +20,8 @@ python3 scripts/hevy.py templates --search curl --muscle biceps
 python3 scripts/hevy.py templates --refresh --search squat
 ```
 
-Titles carry the equipment in brackets, so `Bench Press` alone matches
-fourteen entries across barbell, dumbbell, cable, Smith machine and more. Show
-the matches and let the user pick rather than guessing.
+Titles carry the equipment in brackets, so `Bench Press` matches fourteen
+entries. Show them and let the user pick rather than guessing.
 
 ## Training summary over a period
 
@@ -41,51 +40,45 @@ python3 scripts/hevy.py summary --weeks 4
 python3 scripts/hevy.py summary --weeks 4 --unit lb
 ```
 
-**Skip warmup sets from volume.** Including them inflates the number by roughly
-a fifth and makes week-to-week comparison meaningless.
+**Skip warmup sets from volume.** Including them inflates it by roughly a fifth.
 
-**Say what unit the figures are in.** The API answers in kilograms whoever is
-asking, and reports nothing about what the account displays
-([objects.md](objects.md#units)). `--unit lb` renames every key as it converts,
-so a `volume_lb` can never be mistaken for a `volume_kg`.
+**Say what unit the figures are in.** The API answers in kilograms and reports
+nothing about what the account displays ([objects.md](objects.md#units)).
+`--unit lb` renames every key as it converts, so a `volume_lb` cannot be read as
+a `volume_kg`.
 
-**A null weight change with a latest reading is not a flat weight.** It means
-the window holds no measurement at all.
+**A null weight change with a latest reading is not a flat weight.** The window
+holds no measurement at all.
 
 ## Dumbbell weight is the total, and nothing enforces it
 
 Hevy's app tells a user to log the total lifted per rep, so a pair of 10 kg
 dumbbells is entered as 20 kg. Plenty of people enter one hand instead. The API
-stores both the same way, exposes no flag saying which was meant, and an
-account logging per hand reports half the dumbbell volume it really did.
+stores both identically and flags neither, so an account logging per hand
+reports half the dumbbell volume it did.
 
-**You cannot tell from the data which one you are looking at.** Weights that
-would have to be per hand, such as an odd half of a rack increment, only appear
-in gyms whose racks carry those sizes, so their absence says nothing and most
-accounts never produce one. Treat the convention as unknown rather than
-inferring it.
+**You cannot tell which from the data.** A weight that could only be per hand
+needs a rack carrying half-increments. Its absence says nothing, and most
+accounts never produce one, so treat the convention as unknown.
 
-One weak hint exists, and it is a hint rather than a finding: a movement logged
-both with a barbell and with dumbbells will show the dumbbell figure at roughly
-half its barbell counterpart, because that is arithmetically what logging one
-hand does. The two lifts differ for other reasons too, so it settles nothing.
+One weak hint: a movement logged both with a barbell and with dumbbells shows
+the dumbbell figure near half its barbell counterpart, which is arithmetically
+what logging one hand does. The two lifts differ anyway, so it settles nothing.
 
-**Say which convention a number assumes, and ask when it matters.** That is the
-whole of it. Reporting "31,000 kg of volume, counting dumbbell weights as
-logged" lets the user catch a mismatch in a second, where a bare total does
-not. It matters for a volume figure, a muscle-group split, or a dumbbell lift
-compared against anything else. Trends survive either convention, because
-halving every entry leaves the shape of the curve alone.
+**Say which convention a number assumes, and ask when it matters.** Reporting
+"31,000 kg of volume, counting dumbbell weights as logged" lets the user catch a
+mismatch at once. It matters for a volume figure, a muscle-group split, or a
+dumbbell lift compared against anything else. Trends survive either convention,
+since halving every entry leaves the curve's shape alone.
 
-**Never correct it yourself.** Do not double a weight, do not adjust a summary
-to compensate, and do not rewrite the sets: which convention they meant is
-theirs to say, and changing the history would mean a `PUT` over every affected
-workout with no undo.
+**Never correct it yourself.** Do not double a weight, adjust a summary, or
+rewrite the sets. The convention is theirs to name, and changing history means a
+`PUT` over every affected workout with no undo.
 
 ## Turning a routine into a logged workout
 
-The routine holds the plan. The workout holds what happened, and the API will
-not invent the difference.
+The routine holds the plan, the workout what happened. The API will not invent
+the difference.
 
 1. `GET /v1/routines/{routineId}`, remembering the result is wrapped in
    `{"routine": …}`.
@@ -94,9 +87,8 @@ not invent the difference.
    `superset_id`, and the user's numbers.
 4. `POST /v1/workouts`.
 
-Drop `rest_seconds` and `rep_range`, which exist on a routine set and not on a
-workout set. Never carry a routine's planned weight into a workout as though it
-were performed.
+Drop `rest_seconds` and `rep_range`, which exist on a routine set and not a
+workout set. Never carry a planned weight into a workout as though performed.
 
 ## Progress on one exercise
 
@@ -107,8 +99,7 @@ row per set, unpaginated. Bound it with `start_date` and `end_date`.
 python3 scripts/hevy.py history 79D0BB3A --start 2026-01-01T00:00:00Z
 ```
 
-Rows carry no set index, so group by `workout_id` and keep the order the API
-returns.
+Rows carry no set index, so group by `workout_id` and keep the returned order.
 
 ## Keeping a local copy in step
 
@@ -117,8 +108,8 @@ returns.
 3. Upsert on `type: "updated"`, delete on `type: "deleted"`.
 4. Save the stored timestamp as the new watermark.
 
-Taking the timestamp first is what stops a workout written during the run from
-being missed. `/v1/workouts` alone never reports a deletion.
+Taking the timestamp first stops a workout written mid-run from being missed.
+`/v1/workouts` alone never reports a deletion.
 
 ## Editing without losing data
 
@@ -127,19 +118,17 @@ become `null`, and a live update confirmed it. `PUT /v1/workouts/{workoutId}`
 and `PUT /v1/routines/{routineId}` drop omitted exercises the same way,
 verified live ([observed.md](observed.md#write-behaviour)).
 
-Read the current object, change the one field, strip the keys only reads
-carry, and send it back. For a workout or routine that means `index` on every
-set and `index` and `title` on every exercise. For a measurement it means
-`date`, `id` and `created_at`. The write schemas reject unrecognized keys with
-a `400` ([observed.md](observed.md#write-behaviour)).
+Read the object, change the one field, strip the keys only reads carry, send it
+back. For a workout or routine that is `index` on every set plus `index` and
+`title` on every exercise, and for a measurement `date`, `id` and `created_at`.
+Unrecognized keys are a `400` ([observed.md](observed.md#write-behaviour)).
 
-The client refuses a write without `--yes`, because the API has no delete
-route and a mistake is permanent.
+The client refuses a write without `--yes`, because a mistake is permanent.
 
 ## Querying with SQL, when the user has asked for it
 
-The local mirror is off by default and this recipe does not apply until the
-user turns it on. Never suggest it unprompted ([SKILL.md](../SKILL.md#the-local-mirror-is-off-and-stays-off-unless-asked)).
+The mirror is off by default, so this recipe does not apply until the user
+turns it on. Never suggest it unprompted ([SKILL.md](../SKILL.md#the-local-mirror-is-off-and-stays-off-unless-asked)).
 
 Once enabled, `performed_sets` is one row per performed set, joined to its
 workout and exercise, with `volume_kg` precomputed:
@@ -155,20 +144,19 @@ GROUP BY month ORDER BY month DESC;
 
 **Filter on `exercise_template_id`, never on `exercise_title`.** A title looks
 like the obvious key and is not one. `LIKE 'Bench Press%'` matches six
-templates, mixing barbell with dumbbell, which is loaded per hand, and with the
-close-grip variant Hevy files under triceps. `MAX()` over that returns one
-number belonging to no exercise. Widening the pattern to `%Bench Press%` makes
-it worse, at fourteen templates including every incline and decline. Titles
-drift as well ([observed.md](observed.md#an-exercise-title-is-a-display-name-not-an-identity)).
+templates, mixing barbell with dumbbell and with the close-grip variant Hevy
+files under triceps, so `MAX()` returns a number belonging to no exercise.
+Widening to `%Bench Press%` reaches fourteen, adding every incline and decline.
+Titles drift too ([observed.md](observed.md#an-exercise-title-is-a-display-name-not-an-identity)).
 
-Look the id up first, then query it:
+Look the id up first:
 
 ```bash
 python3 scripts/hevy.py templates --search "bench press"
 ```
 
-To compare the variants rather than pick one, group by the id and label the
-rows with the title:
+To compare variants rather than pick one, group by the id and label with the
+title:
 
 ```sql
 SELECT exercise_title, exercise_template_id,
@@ -179,11 +167,10 @@ GROUP BY exercise_template_id
 ORDER BY best_e1rm_kg DESC;
 ```
 
-`weight_kg * (1 + reps / 30.0)` is the Epley estimate, and it drifts high above
-about ten reps. Filter warmup sets out of anything measuring volume or effort.
-
-The mirror stores what the API returns, so every weight column is kilograms
-however the account displays them ([objects.md](objects.md#units)).
+`weight_kg * (1 + reps / 30.0)` is the Epley estimate, drifting high above about
+ten reps. Filter warmup sets out of anything measuring volume or effort. Every
+weight column is kilograms, as the API returns them
+([objects.md](objects.md#units)).
 
 **The mirror is never authoritative for writes.** It is derived, disposable and
 rebuildable with `hevy.py sync --full`, which is what makes querying it safe.

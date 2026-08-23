@@ -7,7 +7,7 @@ Drawn from the official API-skill repositories on GitHub, checked on
 
 ## The section shape they converge on
 
-Both vendor templates land in nearly the same place:
+The two vendor sets, Alpaca and Venice, land in nearly the same place:
 
 ```
 frontmatter (name, description)
@@ -50,11 +50,10 @@ with a line telling the reader to load it first.
 Venice ships `scripts/sync_from_swagger.py` with JSON snapshots, so its skills
 regenerate from the vendor's OpenAPI document instead of drifting.
 
-**Treat a generated artifact as a starting point, not as truth.** A vendor
-spec can disagree with the vendor's own running API, and a generated client
-then encodes the error in types that look authoritative. Verifying against the
-live service is the step that catches it, and it is the step almost nobody
-takes.
+**Treat a generated artifact as a starting point, not as truth.** A vendor spec
+can disagree with the vendor's own running API, and a generated client encodes
+that error in authoritative-looking types. Verifying live catches it, and almost
+nobody does.
 
 ## Checks in CI
 

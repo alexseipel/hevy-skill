@@ -18,8 +18,8 @@ Two roots, and the split is the point.
 | `.claude-plugin/`                 | plugin marketplace manifest                      |
 
 **`skills/` is what ships. `.agents/skills/` is what builds it.** The two dev
-skills travel with a clone so anyone working on the repository picks them up,
-and they are absent from the marketplace manifest so nobody installs them
+skills travel with a clone, so anyone working on the repository picks them up.
+They are absent from the marketplace manifest, so nobody installs them
 alongside the API skill.
 
 The mirrors under `.claude/`, `.cursor/` and `.gemini/` are committed
@@ -38,12 +38,12 @@ is copied to a user's machine, so it earns its place there or it moves.
 `description`, `license`, `compatibility`, `metadata`, `allowed-tools`. These
 skills use three of them.
 
-The point is portability, and it is not theoretical. No two of these tools
-read the same directory: Codex scans `.agents/skills`, Claude Code
-`.claude/skills`, Cursor `.cursor/skills` and Gemini CLI `.gemini/skills`. A
-repository wired to one vendor is invisible to the rest. Host extensions such
-as `context: fork` or `argument-hint` are worse than invisible, because
-packaging for claude.ai or the Skills API fails outright on them.
+Portability is the point. Codex scans `.agents/skills`, Claude Code
+`.claude/skills`, Cursor `.cursor/skills` and Gemini CLI `.gemini/skills`, so a
+repository wired to one vendor is invisible to the rest.
+
+Host extensions such as `context: fork` or `argument-hint` are worse, because
+packaging for claude.ai or the Skills API fails on them.
 `validate_skill.py` enforces both rules, and prints the `ln -sfn` that fixes a
 missing symlink.
 
@@ -87,7 +87,7 @@ python3 scripts/build_corrected_spec.py --check
 python3 -m unittest discover -s tests
 ```
 
-All four run in CI. `check_coverage.py` fails on any operation missing from
-the documentation, the client or the command line. An endpoint added to one of
-them and forgotten in the others does not merge. The tests cover the client's
-own logic offline: the summary arithmetic, the sync paths and the guard rails.
+All four run in CI. `check_coverage.py` fails on any operation missing from the
+documentation, the client or the command line, so an endpoint added to one and
+forgotten in the others does not merge. The tests cover the client's own logic
+offline: summary arithmetic, sync paths, guard rails.

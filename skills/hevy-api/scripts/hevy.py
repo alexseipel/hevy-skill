@@ -25,31 +25,26 @@ import urllib.request
 
 BASE_URL = "https://api.hevyapp.com"
 
-# The API has no search route, so the exercise catalogue is paged once and kept
-# on disk. It is ~500 entries that change when Hevy ships new exercises.
+# No search route, so the ~500-entry catalogue is paged once and kept on disk.
 CACHE_DIR = pathlib.Path(
     os.environ.get("XDG_CACHE_HOME", pathlib.Path.home() / ".cache")) / "hevy-skill"
 
-# The local mirror is off unless the user turns it on. Training data is
-# personal, and writing it to disk is their decision to make, not a default.
+# Off unless the user turns it on: writing training data to disk is their call.
 CONFIG_DIR = pathlib.Path(
     os.environ.get("XDG_CONFIG_HOME", pathlib.Path.home() / ".config")) / "hevy-skill"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 DB_FILE = CACHE_DIR / "hevy.db"
-# Cached by default, because --search cannot work without it. Announced on
-# every read and write, and removed by 'cache clear' along with the mirror.
+# Cached by default because --search needs it. 'cache clear' removes it too.
 CATALOGUE_FILE = CACHE_DIR / "exercise_templates.json"
 
-# Only workouts have a change feed, so only workouts can be synced exactly.
-# The others are refreshed wholesale, which is why they say so at opt-in time.
+# Only workouts have a change feed, so only workouts sync exactly.
 DATASETS = {
     "workouts": "exact incremental sync via /v1/workouts/events",
     "measurements": "no change feed: refreshed in full on every sync",
     "routines": "no change feed: refreshed in full on every sync",
 }
 
-# Per-route pageSize caps. The API answers 400 above these, and they differ
-# per route, so paging code cannot share one constant.
+# Per-route pageSize caps. The API answers 400 above these.
 PAGE_SIZE_CAP = {
     "/v1/workouts": 10,
     "/v1/workouts/events": 10,
@@ -61,9 +56,7 @@ PAGE_SIZE_CAP = {
 
 RETRY_STATUSES = {429, 500, 502, 503, 504}
 
-# Anything cached, read from cache, or unusually expensive is announced on
-# stderr so stdout stays a clean JSON stream for piping. Set HEVY_QUIET=1 to
-# silence them.
+# Cache and cost notices go to stderr so stdout stays pipeable. HEVY_QUIET=1 silences.
 CALLS_BEFORE_HINT = 10
 _api_calls = 0
 
@@ -115,13 +108,12 @@ def request(method: str, path: str, params: dict | None = None,
                 try:
                     return json.loads(raw)
                 except json.JSONDecodeError:
-                    # POST /v1/exercise_templates answers with the new id as
-                    # bare text, not JSON (reference/observed.md).
+                    # POST /v1/exercise_templates answers with a bare id, not
+                    # JSON (reference/observed.md).
                     return raw.strip()
         except urllib.error.HTTPError as exc:
             raw = exc.read().decode("utf-8", "replace")
-            # A 401 arrives as the plain string "InvalidApiKey" with a text/html
-            # content type, so decoding the body as JSON is never safe here.
+            # A 401 is the plain string "InvalidApiKey" as text/html, never JSON.
             if exc.code in RETRY_STATUSES and attempt < retries:
                 time.sleep(2 ** attempt)
                 continue
@@ -167,8 +159,8 @@ def emit(value: object) -> None:
 def require_confirmation(args: argparse.Namespace) -> None:
     """Refuse a write unless it was asked for explicitly.
 
-    The Hevy API has no delete route, so every create is permanent and every
-    update overwrites. A confirmation flag is the only undo available.
+    The API has no delete route, so a create is permanent and an update
+    overwrites. The flag is the only undo available.
     """
     if not getattr(args, "yes", False):
         sys.exit("This command writes to your Hevy account and cannot be undone.\n"
@@ -211,8 +203,7 @@ def rank_exercises(per_exercise: dict[str, dict], limit: int = 10) -> dict:
     ranked_out: dict[str, dict] = {}
     for template_id, entry in ranked[:limit]:
         label = entry["title"]
-        # Two templates can carry one display name, and a title-keyed dict
-        # would silently drop the second.
+        # Two templates can share a display name, and a title key would drop one.
         if label in ranked_out:
             label = f"{label} [{template_id}]"
         ranked_out[label] = {"sets": entry["sets"],
@@ -221,9 +212,8 @@ def rank_exercises(per_exercise: dict[str, dict], limit: int = 10) -> dict:
     return ranked_out
 
 
-# The pound is defined as exactly 0.45359237 kg, so this is a definition rather
-# than a measured constant. The API stores kilograms whatever the account's
-# display units are, and reports that preference nowhere (reference/objects.md).
+# The pound is defined as exactly 0.45359237 kg. The API stores kilograms
+# whatever the account displays, and reports that nowhere (reference/objects.md).
 KG_PER_LB = 0.45359237
 
 
@@ -284,9 +274,8 @@ def training_summary(weeks: int) -> dict:
         for exercise in workout.get("exercises", []):
             template = by_id.get(exercise.get("exercise_template_id"), {})
             muscle = template.get("primary_muscle_group", "unknown")
-            # Keyed on the template id: a title is a display name, and one
-            # renamed in the catalogue leaves old workouts carrying the old
-            # title, which splits an exercise in two (reference/observed.md).
+            # Keyed on the id: a renamed template leaves old workouts under the
+            # old title, splitting one exercise in two (reference/observed.md).
             entry = per_exercise.setdefault(
                 exercise.get("exercise_template_id") or exercise.get("title", "unknown"),
                 {"title": template.get("title") or exercise.get("title", "unknown"),
@@ -305,9 +294,8 @@ def training_summary(weeks: int) -> dict:
                 if weight and (entry["best_weight_kg"] or 0) < weight:
                     entry["best_weight_kg"] = weight
 
-    # Measurements come newest first too, so index 0 is the latest entry. The
-    # walk needs every entry inside the window plus one weighted entry for the
-    # stale fallback, and stops at the first page that satisfies both.
+    # Newest first. The walk needs the window plus one weighted entry for the
+    # stale fallback, then stops.
     all_weights: list[tuple[str, float]] = []
     page = 1
     while True:
@@ -342,17 +330,12 @@ def training_summary(weeks: int) -> dict:
             "latest": weights[0] if weights else (all_weights[0] if stale else None),
             "change_kg": round(weights[0][1] - weights[-1][1], 2)
             if len(weights) > 1 else None,
-            # A null change with a latest reading means the window holds no
-            # measurement, not that the weight held steady.
+            # A null change with a latest reading means an empty window.
             "note": "latest reading predates the window" if stale else None,
         },
     }
 
 
-# --------------------------------------------------------------------------
-# Local mirror. Off by default; every function here refuses to act until the
-# user has opted in by naming the datasets they want stored.
-# --------------------------------------------------------------------------
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -378,8 +361,7 @@ CREATE INDEX IF NOT EXISTS sets_template
 CREATE INDEX IF NOT EXISTS workouts_start ON workouts(start_time);
 """
 
-# One row per performed set, with its workout and exercise alongside. Most
-# questions people ask are one WHERE clause away from this.
+# One row per performed set, with its workout and exercise alongside.
 SCHEMA_VIEW = """
 CREATE VIEW IF NOT EXISTS performed_sets AS
 SELECT w.id AS workout_id, w.title AS workout_title, w.start_time, w.end_time,
@@ -437,8 +419,7 @@ def store_workout(db: sqlite3.Connection, workout: dict) -> None:
                 workout.get("routine_id"), workout.get("start_time"),
                 workout.get("end_time"), workout.get("created_at"),
                 workout.get("updated_at")))
-    # Replaced wholesale: an edit can remove an exercise, and a partial upsert
-    # would leave the removed rows behind.
+    # Replaced wholesale: a partial upsert would leave removed exercises behind.
     db.execute("DELETE FROM exercises WHERE workout_id = ?", (workout["id"],))
     db.execute("DELETE FROM sets WHERE workout_id = ?", (workout["id"],))
     for position, exercise in enumerate(workout.get("exercises") or []):
@@ -722,8 +703,7 @@ def run(args: argparse.Namespace) -> object:
         return request("PUT", f"/v1/workouts/{args.workout_id}",
                        body=read_json_arg(args.body))
     if cmd == "events":
-        # Sent explicitly because the spec's epoch default is wrong: omitting
-        # since returns no events at all (reference/observed.md).
+        # Sent explicitly: the spec's epoch default returns nothing (observed.md).
         extra = {"since": args.since or "1970-01-01T00:00:00Z"}
         if args.all:
             return paginate("/v1/workouts/events", "events", args.page_size, extra)
@@ -799,8 +779,7 @@ def run(args: argparse.Namespace) -> object:
 
     if cmd == "sql":
         datasets = require_cache("query")
-        # Syncing here rather than as a separate step is what makes the answer
-        # trustworthy: there is no path that queries a stale mirror by accident.
+        # Syncing here means no path can query a stale mirror by accident.
         if not args.no_sync:
             sync(datasets)
         return run_query(args.statement)
@@ -815,11 +794,10 @@ def run(args: argparse.Namespace) -> object:
 
 
 def suggest_mirror_if_expensive(command: str) -> None:
-    """Mention the mirror only when this run actually paid for its absence.
+    """Mention the mirror only when this run paid for its absence.
 
-    Cost is the honest trigger. Detecting a repeated query across runs would
-    need a persistent log of what was asked for, and writing that by default
-    is the thing the mirror being opt-in exists to avoid.
+    Cost is the honest trigger. Spotting a repeated query across runs would
+    need a persistent log, which is the thing opting in exists to avoid.
     """
     if command in ("cache", "sync", "sql") or enabled_datasets():
         return

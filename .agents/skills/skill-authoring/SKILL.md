@@ -1,6 +1,6 @@
 ---
 name: skill-authoring
-description: How to write an agent skill that other tools can load and that a model actually reaches for — the SKILL.md frontmatter the open standard allows, the three tiers of progressive disclosure, how to word a description so it triggers, and the layout conventions the largest published API-skill repositories share. Use when creating a skill, editing one, splitting a large one, debugging why a skill never fires, or reviewing a skill before release.
+description: How to write an agent skill that other tools can load and a model actually reaches for: the SKILL.md frontmatter the open standard allows, the three tiers of progressive disclosure, how to word a description so it triggers, and the layout conventions the largest published API-skill repositories share. Use when creating a skill, editing one, splitting a large one, debugging why a skill never fires, or reviewing a skill before release.
 license: MIT
 ---
 
@@ -46,7 +46,7 @@ against every other installed skill.
   at 1,536 characters in the listing.
 
 WRONG: `description: A helpful skill for working with fitness data.`
-RIGHT: `description: Call the Hevy REST API at api.hevyapp.com — workouts,
+RIGHT: `description: Call the Hevy REST API at api.hevyapp.com: workouts,
 routines, exercise templates, body measurements. Covers the api-key header,
 the pageSize caps and the workout-events sync feed. Use when reading or
 writing Hevy training data, or debugging a Hevy API response.`
@@ -96,14 +96,13 @@ evaluating whether the library is any good.
 ## Verify rather than assert
 
 A skill is a set of claims about a system that changes without telling you.
+Pin the upstream artifact, such as the OpenAPI document, so the content has a
+source to be checked against. Then ship a check that can fail, because a
+validation script that has never gone red is decoration.
 
-- **Pin the upstream artifact** in the skill, such as the OpenAPI document, so
-  the content has a source to be checked against.
-- **Ship a check that fails.** A coverage or validation script that has never
-  gone red is decoration. Break it on purpose once.
-- **Separate documented from observed.** A behaviour you tested but the vendor
-  never wrote down is worth more than anything else in the skill, and it needs
-  a date attached, because it is the part most likely to rot.
+A behaviour you tested that the vendor never wrote down is the most valuable
+thing in the skill, and the part most likely to rot. Separate it from the
+documented half and give it a date.
 
 ## Before release
 

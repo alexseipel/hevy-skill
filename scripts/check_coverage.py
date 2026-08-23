@@ -7,11 +7,11 @@ Three questions, one per column of the report:
   client  does scripts/hevy.py issue a request against this path?
   cli     does a subcommand of hevy.py declare this operation in its help?
 
-The cli column reads the parser's own --help rendering rather than grepping
-the source, so a command renamed without its help text still fails the check.
+The cli column reads the parser's own --help rendering rather than the source,
+so a command renamed without its help text still fails.
 
 Exits non-zero when any operation misses any column, so CI fails on a gap
-instead of shipping a coverage claim nobody checked.
+instead of shipping an unchecked coverage claim.
 """
 
 from __future__ import annotations
