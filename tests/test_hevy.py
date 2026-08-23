@@ -8,6 +8,7 @@ redirected into a temporary directory.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import importlib.util
 import io
@@ -18,6 +19,7 @@ import sys
 import tempfile
 import unittest
 import unittest.mock as mock
+import urllib.error
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CLIENT = ROOT / "skills" / "hevy-api" / "scripts" / "hevy.py"
@@ -108,6 +110,34 @@ class ClientTest(unittest.TestCase):
             hevy.require_confirmation(argparse.Namespace(yes=False))
         hevy.require_confirmation(argparse.Namespace(yes=True))
 
+    def test_every_write_command_refuses_without_yes(self):
+        """The dispatch itself must refuse, not only the helper it could skip."""
+        argvs = [["create-workout", "-"], ["update-workout", "W1", "-"],
+                 ["create-routine", "-"], ["update-routine", "R1", "-"],
+                 ["create-folder", "Legs"], ["create-template", "-"],
+                 ["create-measurement", "-"], ["update-measurement", "2024-01-01", "-"]]
+        parser = hevy.build_parser()
+        for argv in argvs:
+            with self.subTest(command=argv[0]):
+                with self.assertRaises(SystemExit):
+                    hevy.run(parser.parse_args(argv))
+        self.assertEqual(self.api.calls, [], "a refused write must not reach the API")
+
+    def test_notify_prints_unless_quiet_is_truthy(self):
+        for value, expected in (("1", ""), ("0", "[hevy] ping\n"), ("", "[hevy] ping\n")):
+            os.environ["HEVY_QUIET"] = value
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                hevy.notify("ping")
+            self.assertEqual(err.getvalue(), expected, f"HEVY_QUIET={value!r}")
+        os.environ["HEVY_QUIET"] = "1"
+
+    def test_path_ids_are_url_quoted(self):
+        self.api.pages["/v1/workouts/an%20odd%2Fid"] = {1: {"id": "an odd/id"}}
+        parser = hevy.build_parser()
+        hevy.run(parser.parse_args(["workout", "an odd/id"]))
+        self.assertEqual(self.api.calls[0][1], "/v1/workouts/an%20odd%2Fid")
+
     def test_request_passes_a_plain_text_body_through(self):
         """POST /v1/exercise_templates answers with a bare UUID, not JSON."""
         class FakeResp(io.BytesIO):
@@ -123,6 +153,50 @@ class ClientTest(unittest.TestCase):
             body = real_request("POST", "/v1/exercise_templates",
                                 body={"exercise": {"title": "x"}})
         self.assertEqual(body, "11111111-2222-3333-4444-555555555555")
+
+    def failing_urlopen(self, code: int, attempts: list):
+        def urlopen(req, timeout=None):
+            attempts.append(req.get_method())
+            raise urllib.error.HTTPError(req.full_url, code, "error", None,
+                                         io.BytesIO(b"server error"))
+        return urlopen
+
+    def test_request_retries_reads_but_not_writes_on_5xx(self):
+        """A re-sent write can duplicate, and the API has no delete route."""
+        real_request = self.saved["request"]
+        os.environ["HEVY_API_KEY"] = "test-key"
+        self.addCleanup(os.environ.pop, "HEVY_API_KEY", None)
+
+        attempts: list = []
+        with mock.patch.object(hevy.urllib.request, "urlopen",
+                               self.failing_urlopen(502, attempts)), \
+             mock.patch.object(hevy.time, "sleep"):
+            with self.assertRaises(hevy.HevyError) as failed:
+                real_request("POST", "/v1/workouts", body={}, retries=3)
+        self.assertEqual(len(attempts), 1, "a write must not be re-sent after a 5xx")
+        self.assertIn("may still have been applied", str(failed.exception))
+
+        attempts.clear()
+        with mock.patch.object(hevy.urllib.request, "urlopen",
+                               self.failing_urlopen(502, attempts)), \
+             mock.patch.object(hevy.time, "sleep"):
+            with self.assertRaises(hevy.HevyError):
+                real_request("GET", "/v1/workouts", retries=3)
+        self.assertEqual(len(attempts), 4, "a read retries to the limit")
+
+    def test_request_retries_a_write_on_429(self):
+        """A 429 was refused before processing, so re-sending cannot duplicate."""
+        real_request = self.saved["request"]
+        os.environ["HEVY_API_KEY"] = "test-key"
+        self.addCleanup(os.environ.pop, "HEVY_API_KEY", None)
+
+        attempts: list = []
+        with mock.patch.object(hevy.urllib.request, "urlopen",
+                               self.failing_urlopen(429, attempts)), \
+             mock.patch.object(hevy.time, "sleep"):
+            with self.assertRaises(hevy.HevyError):
+                real_request("POST", "/v1/workouts", body={}, retries=2)
+        self.assertEqual(len(attempts), 3)
 
     # ------------------------------------------------------------- pagination
 
@@ -333,6 +407,42 @@ class ClientTest(unittest.TestCase):
         hevy.open_db().close()           # creates the schema
         rows = hevy.run_query("SELECT 1 AS one")
         self.assertEqual(rows, [{"one": 1}])
+
+    def test_run_query_names_the_readonly_wall(self):
+        """A write dressed as a WITH slips the regex and must still fail clearly."""
+        hevy.open_db().close()
+        with self.assertRaises(SystemExit) as refused:
+            hevy.run_query("WITH x AS (SELECT 1) DELETE FROM workouts")
+        self.assertIn("writes go to the API", str(refused.exception))
+
+    def test_sql_syncs_before_querying_unless_told_not_to(self):
+        hevy.write_config({"cache": {"datasets": ["workouts"]}})
+        self.api.pages["/v1/workouts/events"] = {
+            1: {"page": 1, "page_count": 1, "workouts": []}}
+        parser = hevy.build_parser()
+        rows = hevy.run(parser.parse_args(["sql", "SELECT COUNT(*) AS n FROM workouts"]))
+        self.assertEqual(rows, [{"n": 0}])
+        self.assertEqual(len(self.api.calls_to("/v1/workouts/events")), 1)
+
+        self.api.calls.clear()
+        hevy.run(parser.parse_args(["sql", "SELECT 1 AS one", "--no-sync"]))
+        self.assertEqual(self.api.calls, [], "--no-sync must not touch the API")
+
+    def test_cache_lifecycle(self):
+        parser = hevy.build_parser()
+        enabled = hevy.run(parser.parse_args(["cache", "enable", "--workouts"]))
+        self.assertEqual(enabled["enabled"], ["workouts"])
+        self.assertEqual(hevy.enabled_datasets(), ["workouts"])
+
+        hevy.open_db().close()
+        status = hevy.run(parser.parse_args(["cache", "status"]))
+        self.assertTrue(status["exists"])
+        self.assertEqual(status["workouts_rows"], 0)
+
+        cleared = hevy.run(parser.parse_args(["cache", "clear"]))
+        self.assertIn(str(hevy.DB_FILE), cleared["removed"])
+        self.assertFalse(hevy.DB_FILE.is_file())
+        self.assertEqual(hevy.enabled_datasets(), [])
 
     # -------------------------------------------------------------- catalogue
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Command-line client for the Hevy API, one command per endpoint.
 
-Reads the key from HEVY_API_KEY. Standard library only, so it runs anywhere
-python3 does. Every command prints JSON to stdout and errors to stderr.
+Reads the key from HEVY_API_KEY. Standard library only, on Python 3.9 or
+newer. Every command prints JSON to stdout and errors to stderr.
 
     export HEVY_API_KEY="..."
     python3 hevy.py workouts --all | jq '.[].title'
@@ -16,6 +16,7 @@ import json
 import os
 import pathlib
 import re
+import signal
 import sqlite3
 import sys
 import time
@@ -62,17 +63,21 @@ _api_calls = 0
 
 
 def notify(message: str) -> None:
-    if not os.environ.get("HEVY_QUIET"):
+    # "0" keeps the notices: a truthiness check would read it as quiet.
+    if os.environ.get("HEVY_QUIET", "") in ("", "0"):
         print(f"[hevy] {message}", file=sys.stderr)
 
 
 class HevyError(RuntimeError):
     """An API response that was not a success."""
 
-    def __init__(self, status: int, body: str, url: str) -> None:
+    def __init__(self, status: int, body: str, url: str, note: str | None = None) -> None:
         self.status = status
         self.body = body
-        super().__init__(f"HTTP {status} from {url}: {body[:400]}")
+        message = f"HTTP {status} from {url}: {body[:400]}"
+        if note:
+            message += "\n" + note
+        super().__init__(message)
 
 
 def api_key() -> str:
@@ -82,9 +87,19 @@ def api_key() -> str:
     return key
 
 
+WRITE_INTERRUPTED = ("The failed request was a write and may still have been "
+                     "applied. Read the resource back before retrying: the API "
+                     "has no delete route, so a duplicate create is permanent.")
+
+
 def request(method: str, path: str, params: dict | None = None,
             body: dict | None = None, retries: int = 3) -> object:
-    """Call one endpoint and return the decoded JSON, or None for an empty body."""
+    """Call one endpoint and return the decoded JSON, or None for an empty body.
+
+    Reads retry on 429, 5xx and network errors. Writes retry on 429 only: a
+    429 was refused before processing, while a 5xx or a dropped connection can
+    follow a commit, and re-sending would duplicate a permanent write.
+    """
     url = BASE_URL + path
     if params:
         clean = {k: v for k, v in params.items() if v is not None}
@@ -96,6 +111,7 @@ def request(method: str, path: str, params: dict | None = None,
     if data:
         headers["Content-Type"] = "application/json"
 
+    write = method != "GET"
     global _api_calls
     for attempt in range(retries + 1):
         _api_calls += 1
@@ -114,16 +130,24 @@ def request(method: str, path: str, params: dict | None = None,
         except urllib.error.HTTPError as exc:
             raw = exc.read().decode("utf-8", "replace")
             # A 401 is the plain string "InvalidApiKey" as text/html, never JSON.
-            if exc.code in RETRY_STATUSES and attempt < retries:
+            retryable = exc.code == 429 or (not write and exc.code in RETRY_STATUSES)
+            if retryable and attempt < retries:
                 time.sleep(2 ** attempt)
                 continue
-            raise HevyError(exc.code, raw, url) from None
+            note = WRITE_INTERRUPTED if write and exc.code >= 500 else None
+            raise HevyError(exc.code, raw, url, note) from None
         except urllib.error.URLError as exc:
-            if attempt < retries:
+            if not write and attempt < retries:
                 time.sleep(2 ** attempt)
                 continue
-            raise HevyError(0, str(exc.reason), url) from None
+            raise HevyError(0, str(exc.reason), url,
+                            WRITE_INTERRUPTED if write else None) from None
     raise AssertionError("unreachable")
+
+
+def seg(value: str) -> str:
+    """Quote one path segment, so an odd id becomes a clean 404 rather than a crash."""
+    return urllib.parse.quote(str(value), safe="")
 
 
 def paginate(path: str, key: str, page_size: int | None = None,
@@ -505,6 +529,11 @@ def run_query(statement: str) -> list[dict]:
     db = open_db(read_only=True)
     try:
         rows = [dict(row) for row in db.execute(statement).fetchall()]
+    except (sqlite3.Error, sqlite3.Warning) as exc:
+        # Warning is the multi-statement refusal on Python 3.11 and older.
+        hint = (". The mirror is read-only: writes go to the API instead."
+                if "readonly" in str(exc) else "")
+        sys.exit(f"{type(exc).__name__}: {exc}{hint}")
     finally:
         db.close()
     stamp = ""
@@ -694,13 +723,13 @@ def run(args: argparse.Namespace) -> object:
     if cmd == "workout-count":
         return request("GET", "/v1/workouts/count")
     if cmd == "workout":
-        return request("GET", f"/v1/workouts/{args.workout_id}")
+        return request("GET", f"/v1/workouts/{seg(args.workout_id)}")
     if cmd == "create-workout":
         require_confirmation(args)
         return request("POST", "/v1/workouts", body=read_json_arg(args.body))
     if cmd == "update-workout":
         require_confirmation(args)
-        return request("PUT", f"/v1/workouts/{args.workout_id}",
+        return request("PUT", f"/v1/workouts/{seg(args.workout_id)}",
                        body=read_json_arg(args.body))
     if cmd == "events":
         # Sent explicitly: the spec's epoch default returns nothing (observed.md).
@@ -716,13 +745,13 @@ def run(args: argparse.Namespace) -> object:
             return paginate("/v1/routines", "routines", args.page_size)
         return request("GET", "/v1/routines", params=page_params())
     if cmd == "routine":
-        return request("GET", f"/v1/routines/{args.routine_id}")
+        return request("GET", f"/v1/routines/{seg(args.routine_id)}")
     if cmd == "create-routine":
         require_confirmation(args)
         return request("POST", "/v1/routines", body=read_json_arg(args.body))
     if cmd == "update-routine":
         require_confirmation(args)
-        return request("PUT", f"/v1/routines/{args.routine_id}",
+        return request("PUT", f"/v1/routines/{seg(args.routine_id)}",
                        body=read_json_arg(args.body))
 
     if cmd == "folders":
@@ -730,7 +759,7 @@ def run(args: argparse.Namespace) -> object:
             return paginate("/v1/routine_folders", "routine_folders", args.page_size)
         return request("GET", "/v1/routine_folders", params=page_params())
     if cmd == "folder":
-        return request("GET", f"/v1/routine_folders/{args.folder_id}")
+        return request("GET", f"/v1/routine_folders/{seg(args.folder_id)}")
     if cmd == "create-folder":
         require_confirmation(args)
         return request("POST", "/v1/routine_folders",
@@ -748,12 +777,12 @@ def run(args: argparse.Namespace) -> object:
             return paginate("/v1/exercise_templates", "exercise_templates", args.page_size)
         return request("GET", "/v1/exercise_templates", params=page_params())
     if cmd == "template":
-        return request("GET", f"/v1/exercise_templates/{args.template_id}")
+        return request("GET", f"/v1/exercise_templates/{seg(args.template_id)}")
     if cmd == "create-template":
         require_confirmation(args)
         return request("POST", "/v1/exercise_templates", body=read_json_arg(args.body))
     if cmd == "history":
-        return request("GET", f"/v1/exercise_history/{args.template_id}",
+        return request("GET", f"/v1/exercise_history/{seg(args.template_id)}",
                        params={"start_date": args.start, "end_date": args.end})
 
     if cmd == "measurements":
@@ -761,13 +790,13 @@ def run(args: argparse.Namespace) -> object:
             return paginate("/v1/body_measurements", "body_measurements", args.page_size)
         return request("GET", "/v1/body_measurements", params=page_params())
     if cmd == "measurement":
-        return request("GET", f"/v1/body_measurements/{args.date}")
+        return request("GET", f"/v1/body_measurements/{seg(args.date)}")
     if cmd == "create-measurement":
         require_confirmation(args)
         return request("POST", "/v1/body_measurements", body=read_json_arg(args.body))
     if cmd == "update-measurement":
         require_confirmation(args)
-        return request("PUT", f"/v1/body_measurements/{args.date}",
+        return request("PUT", f"/v1/body_measurements/{seg(args.date)}",
                        body=read_json_arg(args.body))
 
     if cmd == "cache":
@@ -824,4 +853,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Die quietly on a closed pipe, so `workouts --all | head` ends clean.
+    if hasattr(signal, "SIGPIPE"):
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     sys.exit(main())
