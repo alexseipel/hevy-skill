@@ -11,6 +11,7 @@ of this script.
 
 from __future__ import annotations
 
+import functools
 import re
 import sys
 from pathlib import Path
@@ -41,7 +42,10 @@ BODY_LINE_CAP = 500         # documented guidance for SKILL.md
 
 SECRET_PATTERNS = [
     ("bearer-token", re.compile(r"\b[A-Za-z0-9_-]{32,}\.[A-Za-z0-9_-]{16,}\b")),
-    ("assigned-key", re.compile(r"(?i)\b(api[-_]?key|hevy[-_]?api[-_]?key)\b\s*[:=]\s*"
+    # The optional quote covers the shape the client itself uses, a quoted
+    # header name in a dict: {"api-key": "..."}.
+    ("assigned-key", re.compile(r"(?i)\b(api[-_]?key|hevy[-_]?api[-_]?key)\b"
+                                r"['\"]?\s*[:=]\s*"
                                 r"['\"]?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}"
                                 r"-[0-9a-f]{4}-[0-9a-f]{12}")),
 ]
@@ -49,7 +53,8 @@ SECRET_PATTERNS = [
 SECRET_ALLOWLIST = ("00000000-0000-0000-0000-000000000000",
                     "$HEVY_API_KEY", "HEVY_API_KEY}", "example", "…")
 
-MARKDOWN_LINK = re.compile(r"\[[^\]]*\]\(([^)#\s]+)(#[^)\s]*)?\)")
+MARKDOWN_LINK = re.compile(r"\[[^\]]*\]\(([^)#\s]*)(#[^)\s]*)?\)")
+HEADING = re.compile(r"^#{1,6}\s+(.*)$")
 
 failures: list[str] = []
 
@@ -166,12 +171,40 @@ def check_discovery_wiring() -> None:
                      f"{where}/{skill_dir.name} points at {link.resolve()}")
 
 
+@functools.lru_cache(maxsize=None)
+def heading_anchors(path: Path) -> frozenset[str]:
+    """GitHub's anchor per heading: lowercase, punctuation dropped, spaces to hyphens."""
+    anchors: set[str] = set()
+    seen: dict[str, int] = {}
+    in_code = False
+    for line in path.read_text().splitlines():
+        if line.lstrip().startswith("```"):
+            in_code = not in_code
+            continue
+        match = None if in_code else HEADING.match(line)
+        if not match:
+            continue
+        text = match.group(1).strip().replace("`", "")
+        slug = re.sub(r"[^\w\- ]", "", text.lower()).replace(" ", "-")
+        count = seen.get(slug, 0)
+        seen[slug] = count + 1
+        anchors.add(slug if count == 0 else f"{slug}-{count}")
+    return frozenset(anchors)
+
+
 def check_links(path: Path) -> None:
-    for target, _anchor in MARKDOWN_LINK.findall(path.read_text()):
+    for target, anchor in MARKDOWN_LINK.findall(path.read_text()):
         if target.startswith(("http://", "https://", "mailto:")):
             continue
-        if not (path.parent / target).resolve().exists():
+        if not target and not anchor:
+            continue
+        resolved = (path.parent / target).resolve() if target else path
+        if not resolved.exists():
             fail(path, "link", f"relative link does not resolve: {target}")
+            continue
+        if anchor and resolved.suffix == ".md":
+            if anchor[1:] not in heading_anchors(resolved):
+                fail(path, "anchor", f"no heading matches {target}{anchor}")
 
 
 def check_secrets(path: Path) -> None:
@@ -201,8 +234,13 @@ def main() -> int:
                for d in skill_dirs(root) for p in sorted(d.rglob("*"))]
     scanned += sorted((ROOT / "scripts").glob("*.py"))
     scanned += sorted((ROOT / "tests").glob("*.py"))
+    # The repo's front door and its workflows leak keys as readily as a fixture.
+    scanned += [ROOT / name for name in
+                ("README.md", "AGENTS.md", "CONTRIBUTING.md", "CLAUDE.md",
+                 "NOTICE", "LICENSE")]
+    scanned += sorted((ROOT / ".github" / "workflows").glob("*.yml"))
     for path in scanned:
-        if path.is_file() and path.suffix in (".md", ".py", ".json"):
+        if path.is_file() and path.suffix in (".md", ".py", ".json", ".yml", ""):
             check_secrets(path)
             if path.suffix == ".md":
                 check_links(path)

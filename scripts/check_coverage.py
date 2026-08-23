@@ -4,7 +4,7 @@
 Three questions, one per column of the report:
 
   docs    does a markdown file in the skill name this method and this path?
-  client  does scripts/hevy.py issue a request against this path?
+  client  does scripts/hevy.py request this method against this path?
   cli     does a subcommand of hevy.py declare this operation in its help?
 
 The cli column reads the parser's own --help rendering rather than the source,
@@ -32,6 +32,10 @@ METHODS = ("get", "post", "put", "patch", "delete")
 # A path reference ends where the path ends. Without this, /v1/workouts would
 # match inside /v1/workouts/count and report coverage it does not have.
 BOUNDARY = r"(?![\w/{-])"
+
+# What a placeholder segment looks like at a client call site: an f-string
+# field such as {seg(args.workout_id)}.
+CLIENT_PLACEHOLDER = r"\{[^}]+\}"
 
 
 def operations(spec: dict) -> list[tuple[str, str]]:
@@ -87,8 +91,12 @@ def main() -> int:
     rows, failures = [], 0
     for method, path in ops:
         documented = re.search(rf"{method}\s+{path_regex(path)}", docs)
-        # The client writes paths as f-strings, so {args.workout_id} counts.
-        called = re.search(path_regex(path, r"\{[^}]+\}"), source)
+        # The call site must carry the method too: most paths serve a GET and
+        # a write, and a path-only match kept a deleted write green through
+        # its sibling. Paths appear as f-strings, so {seg(...)} counts.
+        called = re.search(
+            rf'request\(\s*"{method}",\s*f?"{path_regex(path, CLIENT_PLACEHOLDER)}"',
+            source)
         exposed = re.search(rf"{method} {path_regex(path)}", helps)
         ok = bool(documented and called and exposed)
         failures += not ok
