@@ -99,7 +99,9 @@ def check_frontmatter_yaml(skill_md: Path, text: str) -> None:
         if not match:
             continue
         key, value = match.groups()
-        if value[0] in ("'", '"', ">", "|", "["):
+        # A flow collection is already unambiguous: metadata is documented as a
+        # map, and allowed-tools as a list.
+        if value[0] in ("'", '"', ">", "|", "[", "{"):
             continue
         if ": " in value or " #" in value:
             fail(skill_md, "yaml",
