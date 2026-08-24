@@ -23,8 +23,7 @@ curl -s "https://api.hevyapp.com/v1/user/info" -H "api-key: $HEVY_API_KEY"
 # {"data":{"id":"9c465af3-…","name":"John doe","url":"https://hevy.com/user/jhon"}}
 ```
 
-Never put the key in a URL, a source file or a committed fixture. Read it from
-the environment.
+Never put the key in a URL, a source file or a committed fixture.
 
 ## The endpoints
 
@@ -97,9 +96,9 @@ route:
 | `/v1/exercise_templates` | 100              | 100     |
 | `/v1/body_measurements`  | 10               | 10      |
 
-**The spec's default of 5 is wrong on four routes**: workouts, workout events,
-routines and exercise templates default to their caps
-([reference/observed.md](reference/observed.md)). Send `pageSize` explicitly.
+**The spec's default of 5 is wrong on four routes**, which default to their
+caps instead ([reference/observed.md](reference/observed.md)). Send `pageSize`
+explicitly.
 
 Exceeding the cap returns `400`. Loop while `page <= page_count`, reading
 `page_count` from the first response. A page past the last returns `404`, and
@@ -110,8 +109,8 @@ Exceeding the cap returns `400`. Loop while `page <= page_count`, reading
 | Status | Where                                        | Meaning                                             |
 | ------ | -------------------------------------------- | --------------------------------------------------- |
 | 400    | list routes                                  | `pageSize` over the cap, or a negative `page`       |
-| 400    | POST and PUT routes                          | `{"error": "…"}`, an invalid body                   |
-| 401    | everywhere                                   | missing or wrong `api-key`                          |
+| 400    | POST and PUT routes                          | an invalid body. `error` is a string, except on `POST /v1/exercise_templates` |
+| 401    | everywhere                                   | missing or wrong `api-key`, after body validation on two POSTs |
 | 403    | `POST /v1/routines`                          | routine limit: free plan only, unreachable on active Pro |
 | 403    | `POST /v1/exercise_templates`                | `{"error": "exceeds-custom-exercise-limit"}`, free plan only |
 | 404    | single-item GETs, `PUT /v1/routines/{id}`    | no such item, or it belongs to another account      |
@@ -119,9 +118,15 @@ Exceeding the cap returns `400`. Loop while `page <= page_count`, reading
 | 409    | `POST /v1/body_measurements`                 | a measurement already exists for that date          |
 | 500    | `GET /v1/workouts/events`                    | documented, so retry with backoff                   |
 
-**A `401` is not JSON.** It is the plain string `InvalidApiKey` with
-`Content-Type: text/html`, so check the status before parsing. Observed
-2026-08-22, not documented ([reference/observed.md](reference/observed.md)).
+**An error body is not reliably JSON.** A `401` is the plain string
+`InvalidApiKey` as `text/html`, and three of the six `404`s are plain text too.
+Read the status first, the body as text. Observed 2026-08-24, not documented
+([reference/observed.md](reference/observed.md#17-a-404-body-is-plain-text-on-half-the-routes)).
+
+**`GET /v1/exercise_history/{id}` answers `200` and an empty array for an
+unknown id**, not the `404` every other path-id route gives, so a wrong id
+reads as an exercise never trained
+([reference/observed.md](reference/observed.md#an-unknown-id-is-not-always-a-404)).
 
 ## Syncing a local cache
 
@@ -149,8 +154,7 @@ array position, not by an index you send. There is no search route
 
 **Updating a workout** takes the create body and replaces the workout. Verified
 live: two exercises in, an update carrying one, one left. Send the complete
-exercise list every time, stripped of `index` on sets and `index` and `title`
-on exercises, which only reads carry.
+exercise list every time.
 
 **Updating a measurement** is sharper: `PUT /v1/body_measurements/{date}` sets
 every omitted field to `null`. Read, merge, send the whole object back.
@@ -160,7 +164,7 @@ every omitted field to `null`. Read, merge, send the whole object back.
 - **A superset id can be `0`.** It indexes supersets within one workout, so
   `if (superset_id)` drops the first superset of every workout. Test against
   `null`.
-- **The published spec is wrong in sixteen places**, including the superset
+- **The published spec is wrong in eighteen places**, including the superset
   field name and four `pageSize` defaults
   ([reference/observed.md](reference/observed.md)).
 - **`GET /v1/routines/{routineId}` wraps its result in `{routine: …}`**, while
@@ -268,7 +272,7 @@ mirror.
 | [spec-patches.json](spec-patches.json)                   | each correction, with what it asserts and why      |
 
 `scripts/hevy.py` is a dependency-free client handling the header, the paging
-loop and the API's two non-JSON bodies. Beyond one command per endpoint:
+loop and the five responses that are not JSON. Beyond one command per endpoint:
 
 ```bash
 python3 scripts/hevy.py templates --search "bench press"   # no search route exists

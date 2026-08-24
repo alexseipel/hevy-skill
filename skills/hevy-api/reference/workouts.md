@@ -125,7 +125,9 @@ curl -s "https://api.hevyapp.com/v1/workouts/$WORKOUT_ID" -H "api-key: $HEVY_API
 ```
 
 Returns a bare `Workout`, not wrapped in a key. `404` if the id is unknown or
-belongs to another account.
+belongs to another account, and **that `404` is the bare text `Workout not
+found` under `text/html`**, not JSON
+([observed.md](observed.md#17-a-404-body-is-plain-text-on-half-the-routes)).
 
 ## PUT /v1/workouts/{workoutId}
 

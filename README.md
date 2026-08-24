@@ -7,7 +7,7 @@ An agent skill for the [Hevy](https://hevy.com) training API: every endpoint of
 client to call them with.
 
 All 22 operations are covered, and a CI check proves it. Every documented
-behaviour was verified against a live account, which turned up **sixteen
+behaviour was verified against a live account, which turned up **eighteen
 places where Hevy's published OpenAPI spec is wrong**
 ([observed.md](skills/hevy-api/reference/observed.md)). This skill documents
 what the API does, not what the spec says.
@@ -65,8 +65,9 @@ python3 skills/hevy-api/scripts/hevy.py workouts --all | jq '.[].title'
 ```
 
 **Write commands refuse to run without `--yes`**, because the API has no delete
-route: a create is permanent and an update overwrites. `--help` lists every
-command.
+route: a create is permanent and an update overwrites. A failed write is never re-sent
+either, except on `429`: a `5xx` or a dropped connection can follow a commit,
+so the error says the write may have landed. `--help` lists every command.
 
 ## What this has that a Hevy client usually doesn't
 
@@ -79,7 +80,7 @@ command.
 
 The upstream spec declares no server and no security scheme, so a generated
 client knows neither where to send a request nor how to authenticate. One
-command re-pins Hevy's document from the Swagger UI bundle and re-applies all 27
+command re-pins Hevy's document from the Swagger UI bundle and re-applies all 31
 corrections from [spec-patches.json](skills/hevy-api/spec-patches.json):
 
 ```bash
@@ -107,22 +108,22 @@ python3 skills/hevy-api/scripts/hevy.py sql "
 
 `79D0BB3A` is Bench Press (Barbell), from `templates --search`. Filtering on
 the title would span six templates, including the close-grip variant Hevy files
-under triceps, folding them into one meaningless number.
+under triceps.
 
 - `cache status` reports what is stored and how fresh. `cache clear` deletes
-  the mirror and the cached catalogue together.
+  the mirror and the catalogue together.
 - **Only workouts sync exactly.** The events feed reports edits to a workout of
-  any age. Measurements and routines have no such feed and refresh in full,
-  which is why they are separate opt-ins.
-- `sql` syncs before it queries, so no path reads a stale mirror by accident.
+  any age. Measurements and routines have no feed and refresh in full,
+  so they are separate opt-ins.
+- `sql` syncs before it queries, so no path reads a stale mirror.
   It takes `SELECT` and `WITH` only.
-- A few hundred workouts backfill in about twelve seconds. Later syncs take
-  about one second when nothing has changed.
+- A few hundred workouts backfill in about twelve seconds, and a later sync
+  with nothing to do takes about one.
 - **The exercise catalogue is cached without being asked**, as JSON, because
   `--search` cannot work without it. It is a lookup table rather than training
   history, and `cache clear` removes it.
 
-Every read from a cache, write to one, and deletion of one is announced:
+Every cache read, write and deletion is announced:
 
 ```
 [hevy] cached 453 exercise templates to ~/.cache/hevy-skill/exercise_templates.json.
@@ -134,8 +135,7 @@ Every read from a cache, write to one, and deletion of one is announced:
 Notices go to stderr, so `| jq` still works. `HEVY_QUIET=1` silences them.
 
 The mirror is suggested in one case only: a single command costing ten or more
-API calls. That threshold is a measurement, and the suggestion stops once the
-mirror is on.
+API calls. The suggestion stops once the mirror is on.
 
 ## What is in the repository
 
@@ -152,10 +152,9 @@ mirror is on.
 | `.agents/skills/writing` | the English house style every word here follows |
 | `.agents/skills/skill-authoring` | how to write a skill other tools load |
 
-The last two are the rules this repository is built under. Symlinks in
-`.claude/skills/`, `.cursor/skills/` and `.gemini/skills/` let a clone pick them
-up whichever tool you open it with. They are absent from the plugin manifest, so
-installing the API skill does not drag them along.
+Symlinks in `.claude/skills/`, `.cursor/skills/` and `.gemini/skills/` let a
+clone pick the last two up whichever tool you open it with. The plugin manifest
+omits them, so installing the API skill does not drag them along.
 
 ## What it does not cover
 
@@ -184,7 +183,7 @@ python3 -m unittest discover -s tests
 | `validate_skill.py` | frontmatter, portable fields, the name, relative links, a key committed by accident, a missing discovery symlink |
 | `check_coverage.py` | any operation in `openapi.json` missing from the docs, the client or the command line |
 | `build_corrected_spec.py --check` | the committed corrected spec no longer matching its patch set |
-| `unittest` | the summary arithmetic, the sync upsert and delete paths, the guard rails |
+| `unittest` | the summary arithmetic, the sync upsert and delete paths, the guard rails, and the checks' own rules |
 
 A fifth needs a key, so it runs on demand:
 
@@ -192,9 +191,9 @@ A fifth needs a key, so it runs on demand:
 HEVY_API_KEY=... python3 skills/hevy-api/scripts/verify_live.py
 ```
 
-The count depends on the account: checks needing routines, folders or
-measurements are skipped when there are none. It calls no write route, so write
-behaviour was verified once by hand
+The count varies by account: checks needing routines, folders or
+measurements are skipped when there are none. Its write probes carry an
+invalid key, so write behaviour was verified once by hand
 ([observed.md](skills/hevy-api/reference/observed.md)). A failure names the
 claim it broke.
 

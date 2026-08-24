@@ -141,7 +141,16 @@ def add_page_not_found(document: dict, routes: list[str]) -> int:
         responses = document["paths"][route]["get"]["responses"]
         if "404" in responses:
             continue
-        responses["404"] = {"description": "Page number past the last page"}
+        responses["404"] = {
+            "description": "Page number past the last page",
+            # JSON here, unlike the plain-text 404s on three single-item routes
+            # (reference/observed.md row 17).
+            "content": {"application/json": {"schema": {
+                "type": "object",
+                "properties": {"error": {"type": "string"}},
+                "example": {"error": "Page not found"},
+            }}},
+        }
         added += 1
     return added
 

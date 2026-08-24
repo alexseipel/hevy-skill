@@ -1,7 +1,7 @@
 {
   "_comment": "Corrections applied to Hevy's published OpenAPI document. Each patch asserts what it expects to find, so a patch that stops matching means upstream changed and the correction needs re-checking rather than silently reapplying. See reference/observed.md for how each was verified.",
   "upstream": "https://api.hevyapp.com/docs/swagger-ui-init.js",
-  "verified_at": "2026-08-23",
+  "verified_at": "2026-08-24",
   "patches": [
     {
       "id": "add-servers",
@@ -303,11 +303,73 @@
     },
     {
       "id": "routine-get-404",
-      "why": "Every other single-item GET documents a 404. This route documents only 200 and 400, while an unknown routine id returns 404 like the rest. Observed 2026-08-23.",
+      "why": "Every other single-item GET documents a 404. This route documents only 200 and 400, while an unknown routine id returns 404 with {\"error\": \"Routine not found\"} as JSON. Observed 2026-08-23, body shape 2026-08-24.",
       "op": "add",
       "pointer": "/paths/~1v1~1routines~1{routineId}/get/responses/404",
       "value": {
-        "description": "No routine with this id on this account"
+        "description": "No routine with this id on this account",
+        "content": {
+          "application/json": {
+            "schema": { "type": "object", "properties": { "error": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    {
+      "id": "workout-404-plain-text",
+      "why": "The 404 declares no content, and the body is the bare string \"Workout not found\" served as text/html, not JSON. A generated client that parses every error body as JSON throws here. Observed 2026-08-24.",
+      "op": "add",
+      "pointer": "/paths/~1v1~1workouts~1{workoutId}/get/responses/404/content",
+      "value": {
+        "text/html": { "schema": { "type": "string", "example": "Workout not found" } }
+      }
+    },
+    {
+      "id": "folder-404-plain-text",
+      "why": "The 404 declares no content, and the body is the bare string \"Routine folder not found\" served as text/html, not JSON. A generated client that parses every error body as JSON throws here. Observed 2026-08-24.",
+      "op": "add",
+      "pointer": "/paths/~1v1~1routine_folders~1{folderId}/get/responses/404/content",
+      "value": {
+        "text/html": { "schema": { "type": "string", "example": "Routine folder not found" } }
+      }
+    },
+    {
+      "id": "template-404-plain-text",
+      "why": "The 404 declares no content, and the body is the bare string \"Exercise template not found\" served as text/html, not JSON. A generated client that parses every error body as JSON throws here. Observed 2026-08-24.",
+      "op": "add",
+      "pointer": "/paths/~1v1~1exercise_templates~1{exerciseTemplateId}/get/responses/404/content",
+      "value": {
+        "text/html": { "schema": { "type": "string", "example": "Exercise template not found" } }
+      }
+    },
+    {
+      "id": "template-create-400-error-object",
+      "why": "The 400 body's error is an object holding an issues array, not the string the spec declares. Every other route that answers {\"error\": \u2026} sends a string, so a caller cannot treat the field uniformly. Observed 2026-08-24.",
+      "op": "replace",
+      "pointer": "/paths/~1v1~1exercise_templates/post/responses/400/content",
+      "from": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "error": { "type": "string", "description": "Error message", "example": "Invalid request body" }
+            }
+          }
+        }
+      },
+      "to": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "object",
+                "description": "A validation report, not a message",
+                "properties": { "issues": { "type": "array", "items": { "type": "object" } } }
+              }
+            }
+          }
+        }
       }
     },
     {

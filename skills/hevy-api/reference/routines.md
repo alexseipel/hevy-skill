@@ -77,7 +77,10 @@ to special-case it.
 Here the wrapper holds an object. On `POST` and `PUT` the same key holds a
 one-element array, so the read and write shapes of one resource differ.
 
-The spec documents `400` here rather than `404`.
+The spec documents `400` here rather than `404`. The body is
+`{"error": "Routine not found"}` as JSON, unlike the plain-text `404`s on
+workouts, folders and templates
+([observed.md](observed.md#17-a-404-body-is-plain-text-on-half-the-routes)).
 
 ## PUT /v1/routines/{routineId}
 
@@ -138,7 +141,9 @@ not name.
 curl -s "https://api.hevyapp.com/v1/routine_folders/42" -H "api-key: $HEVY_API_KEY"
 ```
 
-Returns a bare `RoutineFolder`. `404` if the folder does not exist.
+Returns a bare `RoutineFolder`. `404` if the folder does not exist, sent as the
+bare text `Routine folder not found` rather than JSON
+([observed.md](observed.md#17-a-404-body-is-plain-text-on-half-the-routes)).
 
 To move a routine between folders, change `folder_id` with
 `PUT /v1/routines/{routineId}`.

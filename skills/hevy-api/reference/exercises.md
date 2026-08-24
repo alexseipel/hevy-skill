@@ -76,7 +76,10 @@ curl -s -X POST "https://api.hevyapp.com/v1/exercise_templates" \
 ```
 
 Every enum value is listed in [objects.md](objects.md#enums). A value outside
-those lists is a `400`.
+those lists is a `400`, and here alone `error` holds an object rather than a
+message: `{"error": {"issues": [...]}}`. This route also validates the body
+before it checks the key, so a `400` does not mean the key was accepted
+([observed.md](observed.md#18-an-invalid-template-body-answers-with-an-error-object)).
 
 `403` returns `{"error": "exceeds-custom-exercise-limit"}`, a free-plan limit
 of 7 custom exercises that an active Pro key cannot reach
@@ -94,7 +97,9 @@ curl -s "https://api.hevyapp.com/v1/exercise_templates/D04AC939" \
   -H "api-key: $HEVY_API_KEY"
 ```
 
-Returns a bare `ExerciseTemplate`. `404` if the id is unknown.
+Returns a bare `ExerciseTemplate`. `404` if the id is unknown, sent as the bare
+text `Exercise template not found` rather than JSON
+([observed.md](observed.md#17-a-404-body-is-plain-text-on-half-the-routes)).
 
 ## GET /v1/exercise_history/{exerciseTemplateId}
 
@@ -120,6 +125,10 @@ curl -s "https://api.hevyapp.com/v1/exercise_history/D04AC939?start_date=2024-01
     "distance_meters": null, "duration_seconds": null, "rpe": 8.5,
     "custom_metric": null, "set_type": "normal" } ] }
 ```
+
+**An unknown template id answers `200` with an empty array**, not `404`, so a
+typo reads as an exercise never trained. Check the id against the catalogue
+first ([observed.md](observed.md#an-unknown-id-is-not-always-a-404)).
 
 **This route is not paginated**, so an exercise with years of history returns
 one large response. Bound it with `start_date` and `end_date` rather than

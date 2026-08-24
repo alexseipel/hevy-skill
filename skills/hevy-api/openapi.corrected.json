@@ -2,9 +2,9 @@
   "openapi": "3.0.0",
   "info": {
     "title": "Hevy API Docs",
-    "description": "\n      Welcome to Hevy's public API! We're just starting to roll this out and depending on your\n      feedback, we'll be adding more features and endpoints. Also, we make no guarantees that \n      we won't completely change the structure or abandon the project entirely so use it at\n      your own risk. Currently, this API is only available to Hevy Pro users. You can get your \n      key on our web app at https://hevy.com/settings?developer. If you have any questions,\n      please reach out to pavel@hevyapp.com \ud83e\udd1d.\n\n      CORRECTED COPY. 27 corrections verified against the live API on 2026-08-23, plus 404 responses on 5 list routes. The upstream document is openapi.json, and the corrections are listed in spec-patches.json and reference/observed.md.\n      ",
+    "description": "\n      Welcome to Hevy's public API! We're just starting to roll this out and depending on your\n      feedback, we'll be adding more features and endpoints. Also, we make no guarantees that \n      we won't completely change the structure or abandon the project entirely so use it at\n      your own risk. Currently, this API is only available to Hevy Pro users. You can get your \n      key on our web app at https://hevy.com/settings?developer. If you have any questions,\n      please reach out to pavel@hevyapp.com \ud83e\udd1d.\n\n      CORRECTED COPY. 31 corrections verified against the live API on 2026-08-24, plus 404 responses on 5 list routes. The upstream document is openapi.json, and the corrections are listed in spec-patches.json and reference/observed.md.\n      ",
     "version": "0.0.1",
-    "x-corrections-verified-at": "2026-08-23",
+    "x-corrections-verified-at": "2026-08-24",
     "x-corrections-source": "spec-patches.json",
     "x-upstream": {
       "source": "https://api.hevyapp.com/docs",
@@ -71,7 +71,22 @@
             "description": "Invalid page size"
           },
           "404": {
-            "description": "Page number past the last page"
+            "description": "Page number past the last page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "example": {
+                    "error": "Page not found"
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -210,7 +225,22 @@
             "description": "Internal Server Error"
           },
           "404": {
-            "description": "Page number past the last page"
+            "description": "Page number past the last page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "example": {
+                    "error": "Page not found"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -241,7 +271,15 @@
             }
           },
           "404": {
-            "description": "Workout not found"
+            "description": "Workout not found",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string",
+                  "example": "Workout not found"
+                }
+              }
+            }
           }
         }
       },
@@ -394,7 +432,22 @@
             "description": "Invalid page size"
           },
           "404": {
-            "description": "Page number past the last page"
+            "description": "Page number past the last page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "example": {
+                    "error": "Page not found"
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -520,7 +573,19 @@
             }
           },
           "404": {
-            "description": "No routine with this id on this account"
+            "description": "No routine with this id on this account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -666,7 +731,22 @@
             "description": "Invalid page size"
           },
           "404": {
-            "description": "Page number past the last page"
+            "description": "Page number past the last page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "example": {
+                    "error": "Page not found"
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -708,9 +788,16 @@
                   "type": "object",
                   "properties": {
                     "error": {
-                      "type": "string",
-                      "description": "Error message",
-                      "example": "Invalid request body"
+                      "type": "object",
+                      "description": "A validation report, not a message",
+                      "properties": {
+                        "issues": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -763,7 +850,15 @@
             }
           },
           "404": {
-            "description": "Exercise template not found"
+            "description": "Exercise template not found",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string",
+                  "example": "Exercise template not found"
+                }
+              }
+            }
           }
         }
       }
@@ -827,7 +922,22 @@
             "description": "Invalid page size"
           },
           "404": {
-            "description": "Page number past the last page"
+            "description": "Page number past the last page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "example": {
+                    "error": "Page not found"
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -910,7 +1020,15 @@
             }
           },
           "404": {
-            "description": "Routine folder not found"
+            "description": "Routine folder not found",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string",
+                  "example": "Routine folder not found"
+                }
+              }
+            }
           }
         }
       }

@@ -45,7 +45,9 @@ curl -s -X POST "https://api.hevyapp.com/v1/body_measurements" \
 ```
 
 The body is a `BodyMeasurement` directly, with no wrapper key. Only `date` is
-required, in `YYYY-MM-DD`.
+required, in `YYYY-MM-DD`. This route validates the body before it checks the
+key, so a malformed request answers `400` whether or not the key is valid
+([observed.md](observed.md#16-a-401-is-plain-text)).
 
 **`409` means an entry for that date already exists.** Treat it as the signal
 to switch to `PUT`, not as an error to retry. An importer that walks a range of
@@ -59,7 +61,8 @@ curl -s "https://api.hevyapp.com/v1/body_measurements/2024-08-14" \
 ```
 
 Returns a bare `BodyMeasurement`. `404` returns `{"error": "…"}` when no entry
-exists for that date.
+exists for that date, one of the three `404`s that are JSON
+([observed.md](observed.md#17-a-404-body-is-plain-text-on-half-the-routes)).
 
 ## PUT /v1/body_measurements/{date}
 

@@ -3,8 +3,10 @@
 
     HEVY_API_KEY=... python3 verify_live.py
 
-Read-only. It calls no write route, because the Hevy API has no delete route
-and test data in a real account is permanent.
+No request it sends can write. Every read carries your key, and the `POST` and
+`PUT` probes that pin the `401` shape carry an invalid one, which authenticates
+nothing. The Hevy API has no delete route, so test data in a real account is
+permanent.
 
 Every check names the claim it is testing, so a failure says which line of the
 documentation went stale rather than only that something changed.
@@ -58,15 +60,66 @@ def call_dict(path: str, **params) -> dict:
     return {}
 
 
-def bad_key_probe() -> tuple[int, str, str]:
-    """Status, content type and body for a request carrying a wrong key."""
-    req = urllib.request.Request(BASE + "/v1/user/info", headers={"api-key": "invalid"})
+def raw_call(path: str, key: str | None = None, method: str = "GET",
+             body: bytes | None = None) -> tuple[int, str, str]:
+    """Status, content type and undecoded body, for claims about the body's shape.
+
+    A wrong key is safe to send to a write route: it resolves to no account,
+    so nothing can be created (reference/observed.md#16-a-401-is-plain-text).
+    """
+    headers = {"api-key": key if key is not None else os.environ["HEVY_API_KEY"]}
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(BASE + path, headers=headers, data=body, method=method)
     try:
         with urllib.request.urlopen(req, timeout=30) as response:
-            return response.status, response.headers.get("Content-Type", ""), ""
+            return (response.status, response.headers.get("Content-Type", "") or "",
+                    response.read().decode("utf-8", "replace").strip())
     except urllib.error.HTTPError as exc:
-        content_type = exc.headers.get("Content-Type", "") or ""
-        return exc.code, content_type, exc.read().decode().strip()
+        return (exc.code, exc.headers.get("Content-Type", "") or "",
+                exc.read().decode("utf-8", "replace").strip())
+
+
+# Row 17: three of these answer plain text and three answer JSON, and nothing
+# upstream says which is which.
+PLAIN_TEXT_404 = [
+    ("/v1/workouts/00000000-0000-0000-0000-000000000000", "Workout not found"),
+    ("/v1/routine_folders/999999999", "Routine folder not found"),
+    ("/v1/exercise_templates/ZZZZZZZZ", "Exercise template not found"),
+]
+JSON_404 = [
+    "/v1/routines/00000000-0000-0000-0000-000000000000",
+    "/v1/body_measurements/1990-01-01",
+]
+
+# All 22 operations bar the two that validate the body first, so "on every
+# route" is a measurement rather than an inference from one probe.
+NIL = "00000000-0000-0000-0000-000000000000"
+EVERY_ROUTE = [
+    ("GET", "/v1/user/info"),
+    ("GET", "/v1/workouts?pageSize=1"), ("POST", "/v1/workouts"),
+    ("GET", "/v1/workouts/count"), ("GET", "/v1/workouts/events"),
+    ("GET", f"/v1/workouts/{NIL}"), ("PUT", f"/v1/workouts/{NIL}"),
+    ("GET", "/v1/routines?pageSize=1"), ("POST", "/v1/routines"),
+    ("GET", f"/v1/routines/{NIL}"), ("PUT", f"/v1/routines/{NIL}"),
+    ("GET", "/v1/routine_folders?pageSize=1"), ("POST", "/v1/routine_folders"),
+    ("GET", "/v1/routine_folders/999999999"),
+    ("GET", "/v1/exercise_templates?pageSize=1"),
+    ("GET", "/v1/exercise_templates/ZZZZZZZZ"),
+    ("GET", "/v1/exercise_history/D04AC939"),
+    ("GET", "/v1/body_measurements?pageSize=1"),
+    ("GET", "/v1/body_measurements/1990-01-01"),
+    ("PUT", "/v1/body_measurements/1990-01-01"),
+]
+
+# The two routes that validate the body first, with a body each accepts as
+# well formed, so the 401 is reached rather than masked by a 400.
+VALIDATES_BEFORE_AUTH = [
+    ("/v1/body_measurements", b'{"date":"1990-01-02","weight_kg":70}'),
+    ("/v1/exercise_templates",
+     b'{"exercise":{"title":"probe","exercise_type":"weight_reps",'
+     b'"equipment_category":"barbell","muscle_group":"chest","other_muscles":[]}}'),
+]
 
 
 def check(claim: str, expected, actual) -> None:
@@ -138,7 +191,10 @@ def main() -> int:
           (lambda s, b: (s, b.get("page")))(*call("/v1/workouts", page=0, pageSize=1)))
     check("page=-1 is rejected", 400, call("/v1/workouts", page=-1, pageSize=1)[0])
     for path in caps:
-        check(f"{path} page past the end is 404", 404, call(path, page=99999)[0])
+        status, content_type, _ = raw_call(f"{path}?page=99999")
+        check(f"{path} page past the end is 404", 404, status)
+        check(f"{path} sends that 404 as application/json", True,
+              content_type.startswith("application/json"))
     check("pageSize=0 is accepted", 200, call("/v1/workouts", pageSize=0)[0])
 
     # Guarded like the blocks below: an account with no workouts skips these
@@ -246,16 +302,50 @@ def main() -> int:
               run_ids.count(None) <= 1
               and (None not in run_ids or run_ids[-1] is None))
 
-    check("an unknown workout id is 404", 404,
-          call("/v1/workouts/00000000-0000-0000-0000-000000000000")[0])
-    # The spec documents only 200 and 400 on this route (observed.md row 15).
-    check("an unknown routine id is 404", 404,
-          call("/v1/routines/00000000-0000-0000-0000-000000000000")[0])
+    # Row 17: which 404s are JSON and which are bare text, since nothing
+    # upstream distinguishes them.
+    for path, message in PLAIN_TEXT_404:
+        status, content_type, body = raw_call(path)
+        check(f"{path.rsplit('/', 1)[0]}/<unknown> is 404", 404, status)
+        check(f"{path} answers text/html, not JSON", True,
+              content_type.startswith("text/html"))
+        check(f"{path} answers the bare string {message!r}", message, body)
+    for path in JSON_404:
+        status, content_type, _ = raw_call(path)
+        check(f"{path.rsplit('/', 1)[0]}/<unknown> is 404", 404, status)
+        check(f"{path} answers application/json", True,
+              content_type.startswith("application/json"))
 
-    status, content_type, body = bad_key_probe()
-    check("a wrong key is 401", 401, status)
-    check("the 401 body is the plain string InvalidApiKey", "InvalidApiKey", body)
-    check("the 401 is served as text/html", True, content_type.startswith("text/html"))
+    # The one path-id route answering 200 for an id that cannot exist
+    # (observed.md#an-unknown-id-is-not-always-a-404).
+    status, unknown_history = call("/v1/exercise_history/ZZZZZZZZ")
+    check("an unknown exercise template id is not a 404", 200, status)
+    check("it answers an empty history instead", {"exercise_history": []}, unknown_history)
+
+    for method, path in EVERY_ROUTE:
+        status, content_type, body = raw_call(
+            path, key="invalid", method=method,
+            body=b"{}" if method in ("POST", "PUT") else None)
+        check(f"a wrong key is 401 on {method} {path.split('?')[0]}", 401, status)
+        check(f"that 401 is InvalidApiKey as text/html on {method} {path.split('?')[0]}",
+              (True, "InvalidApiKey"), (content_type.startswith("text/html"), body))
+
+    for path, well_formed in VALIDATES_BEFORE_AUTH:
+        malformed, _, _ = raw_call(path, key="invalid", method="POST", body=b"{}")
+        check(f"POST {path} answers 400 before it checks the key", 400, malformed)
+        authenticated, _, _ = raw_call(path, key="invalid", method="POST", body=well_formed)
+        check(f"POST {path} answers 401 once the body is well formed", 401, authenticated)
+
+    # Row 18: error is an object here and a string everywhere else.
+    _, _, invalid_template = raw_call("/v1/exercise_templates", key="invalid",
+                                      method="POST", body=b"{}")
+    try:
+        error = json.loads(invalid_template).get("error")
+    except json.JSONDecodeError:
+        error = invalid_template
+    check("an invalid template body answers with an error object", dict, type(error))
+    check("that object holds an issues array", True,
+          isinstance(error, dict) and isinstance(error.get("issues"), list))
 
     # The Allow header is the server enumerating its own registered methods,
     # which settles "is there a hidden delete" more strongly than probing.

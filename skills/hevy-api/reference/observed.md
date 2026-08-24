@@ -1,9 +1,9 @@
 # Where the spec is wrong
 
 The published [openapi.json](../openapi.json) disagrees with the live API in
-sixteen places. Every read-only row re-runs with `scripts/verify_live.py`,
-last on **2026-08-23**. Rows 11 to 13 need writes and were verified once on the
-same date ([write behaviour](#write-behaviour)).
+eighteen places. Every read-only row re-runs with `scripts/verify_live.py`,
+last on **2026-08-24**. Rows 11 to 13 need writes and were verified once on
+2026-08-23 ([write behaviour](#write-behaviour)).
 
 Re-run the check before trusting a row:
 
@@ -34,6 +34,8 @@ where to send a request nor how to authenticate.
 | 14 | `GET /v1/workouts/events` with nothing to report | `events: []` | **a `workouts` key instead**, and no `events` at all |
 | 15 | `GET /v1/routines/{routineId}`, unknown id | `200` and `400` only | **`404`**, like every other single-item GET |
 | 16 | a wrong or missing key | no `401` documented | **the plain string `InvalidApiKey` as `text/html`**, never JSON |
+| 17 | a `404` body | JSON, where it is declared at all | **plain text as `text/html` on three routes**, JSON on three |
+| 18 | `POST /v1/exercise_templates`, invalid body | `error` is a string | **an object holding an `issues` array** |
 
 ## 1. The superset field is not renamed
 
@@ -197,9 +199,48 @@ does too. The spec gives the GET `200` and `400` only, while the API answers
 ## 16. A 401 is plain text
 
 A missing or wrong key returns the string `InvalidApiKey` with
-`Content-Type: text/html`, on every route. The spec documents no `401` at all,
-so check the status before parsing the body. Observed 2026-08-22; the corrected
-spec carries this on its security scheme.
+`Content-Type: text/html`. The spec documents no `401` at all, so check the
+status before parsing the body.
+
+Observed 2026-08-22, re-checked on 2026-08-24 across all 22 routes, and
+carried on the corrected spec's security scheme.
+
+**Two routes answer `400` before they check the key.** A malformed body sent to
+`POST /v1/exercise_templates` or `POST /v1/body_measurements` returns the
+validation error even when the key is invalid, so a `400` there does not mean
+the key was accepted. Send a well-formed body and the same request returns
+`401`. The other twenty routes check the key first. Observed 2026-08-24.
+
+## 17. A 404 body is plain text on half the routes
+
+| Route | `404` body | Content type |
+| ----- | ---------- | ------------ |
+| `GET /v1/workouts/{workoutId}` | `Workout not found` | `text/html` |
+| `GET /v1/routine_folders/{folderId}` | `Routine folder not found` | `text/html` |
+| `GET /v1/exercise_templates/{exerciseTemplateId}` | `Exercise template not found` | `text/html` |
+| `GET /v1/routines/{routineId}` | `{"error":"Routine not found"}` | `application/json` |
+| `GET /v1/body_measurements/{date}` | `{"error":"Body measurement not found"}` | `application/json` |
+| any list route, `page` past the end | `{"error":"Page not found"}` | `application/json` |
+
+The spec declares a JSON body on the measurement route and nothing about
+content anywhere else. Nothing upstream warns a caller that half of these throw
+on `json.loads`, so read the status first and the body as text. Observed
+2026-08-24, and the corrected spec now declares both shapes.
+
+## 18. An invalid template body answers with an error object
+
+`POST /v1/exercise_templates` sends `{"error": {"issues": [...]}}`, an object,
+where the spec declares `error` as a string. `POST /v1/body_measurements` does
+send a string, but the string is itself a JSON document, so neither route gives
+a message you can show a user. Observed 2026-08-24.
+
+## An unknown id is not always a 404
+
+`GET /v1/exercise_history/{exerciseTemplateId}` answers `200` and
+`{"exercise_history": []}` for an id that does not exist, while every other
+route taking a path id answers `404`. A typo reads as an exercise you have
+never trained rather than as a wrong id. Check the id against the catalogue
+before reporting an empty history. Observed 2026-08-24.
 
 ## Ordering, which the spec never states
 
