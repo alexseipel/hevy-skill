@@ -21,7 +21,11 @@ All four run in CI and gate the merge.
 - Behaviour the spec does not document is marked as observed, with a date, and
   gains a check in `skills/hevy-api/scripts/verify_live.py` in the same commit.
 - The key comes from `HEVY_API_KEY` and never appears in a file.
-- Run `python3 .agents/skills/writing/scripts/prose_check.py` over any prose
-  you touched.
+- Measure any prose you touched. The script takes the files as arguments and
+  reports nothing when given none:
+
+```bash
+python3 .agents/skills/writing/scripts/prose_check.py README.md skills/hevy-api/SKILL.md
+```
 
 Contributions are accepted under the MIT licence in [LICENSE](LICENSE).
