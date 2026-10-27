@@ -34,8 +34,8 @@ whatever their spec entries document ([observed.md](observed.md)).
 
 ## POST /v1/body_measurements
 
-Creates the entry for one date and returns **`201`**, not the `200` the spec
-documents. The body is empty either way, so read the entry back with
+Creates the entry for one date and returns **`201`**, as the current spec
+documents. The body is empty, so read the entry back with
 `GET /v1/body_measurements/{date}` when you need the stored values.
 
 ```bash

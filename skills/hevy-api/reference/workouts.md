@@ -11,7 +11,7 @@ A page of complete workouts, each with its exercises and sets.
 | ---------- | ------ | ------- | ------------------------ |
 | `api-key`  | header | —       | required                 |
 | `page`     | query  | 1       | 1 or greater             |
-| `pageSize` | query  | 10      | maximum 10. The spec's default of 5 is wrong ([observed.md](observed.md)) |
+| `pageSize` | query  | 10      | maximum 10 |
 
 ```bash
 curl -s "https://api.hevyapp.com/v1/workouts?page=1&pageSize=10" \
@@ -27,9 +27,8 @@ page 1.
 
 ## POST /v1/workouts
 
-Creates a workout and returns `201`. The body is **not** the bare `Workout`
-the spec promises: it arrives wrapped in a key and inside an array, as
-`{"workout": [ {...} ]}` ([observed.md](observed.md#11-writes-answer-with-the-object-wrapped-and-in-an-array)).
+Creates a workout and returns `201` as `{"workout": [ {...} ]}`, matching
+the current [response schema](../openapi.json).
 Reach the created object with `body.workout[0]`, and read its `id` from there.
 
 The body wraps everything in a `workout` key:
@@ -40,7 +39,7 @@ The body wraps everything in a `workout` key:
 | `description` | string, null        |                                             |
 | `start_time`  | string              | ISO 8601, such as `2024-08-14T12:00:00Z`    |
 | `end_time`    | string              | ISO 8601                                    |
-| `is_private`  | boolean             | accepted here, absent from the response     |
+| `is_private`  | boolean             | optional, defaults to `false`, absent from the response |
 | `exercises`   | request Exercise[]  | see [objects.md](objects.md)                |
 
 ```bash
@@ -63,10 +62,9 @@ curl -s -X POST "https://api.hevyapp.com/v1/workouts" \
           ] } ] } }'
 ```
 
-The spec marks no field as required, so the practical minimum is a
-`start_time`, an `end_time` and one exercise with one set. Resolve every
-`exercise_template_id` first, because an unknown id is a `400` with
-`{"error": "…"}`.
+The spec requires the `workout` wrapper and its `title`, `start_time`,
+`end_time` and `exercises` fields. Resolve every `exercise_template_id` first,
+because an unknown id is a `400` with `{"error": "…"}`.
 
 Sets are ordered by their position in the array. Do not send `index`.
 
@@ -87,7 +85,7 @@ The incremental feed. Events run newest first.
 | ---------- | ------ | ---------------------- | ---------------------------- |
 | `api-key`  | header | —                      | required                     |
 | `page`     | query  | 1                      | 1 or greater                 |
-| `pageSize` | query  | 10                     | maximum 10. The spec's default of 5 is wrong ([observed.md](observed.md)) |
+| `pageSize` | query  | 10                     | maximum 10 |
 | `since`    | query  | —                      | ISO 8601. The spec's epoch default is wrong: omitting `since` returns no events ([observed.md](observed.md)) |
 
 ```bash

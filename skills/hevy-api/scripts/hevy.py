@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Command-line client for the Hevy API, one command per endpoint.
 
-Reads the key from HEVY_API_KEY. Standard library only, on Python 3.9 or
+Reads the key from HEVY_API_KEY. Standard library only, on Python 3.11 or
 newer. Every command prints JSON to stdout and errors to stderr.
 
     export HEVY_API_KEY="..."
@@ -128,7 +128,8 @@ def request(method: str, path: str, params: dict | None = None,
                     # JSON (reference/observed.md).
                     return raw.strip()
         except urllib.error.HTTPError as exc:
-            raw = exc.read().decode("utf-8", "replace")
+            with exc:
+                raw = exc.read().decode("utf-8", "replace")
             # A 401 is the plain string "InvalidApiKey" as text/html, never JSON.
             retryable = exc.code == 429 or (not write and exc.code in RETRY_STATUSES)
             if retryable and attempt < retries:
@@ -236,8 +237,7 @@ def rank_exercises(per_exercise: dict[str, dict], limit: int = 10) -> dict:
     return ranked_out
 
 
-# The pound is defined as exactly 0.45359237 kg. The API stores kilograms
-# whatever the account displays, and reports that nowhere (reference/objects.md).
+# The API stores kilograms regardless of display preferences (reference/objects.md).
 KG_PER_LB = 0.45359237
 
 

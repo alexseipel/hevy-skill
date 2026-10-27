@@ -196,11 +196,14 @@ def build(fetch: bool) -> str:
 
     document["info"]["description"] = (
         document["info"].get("description", "").rstrip()
-        + f"\n\n      CORRECTED COPY. {len(config['patches'])} corrections verified against "
-          f"the live API on {config['verified_at']}, plus 404 responses on "
+        + f"\n\n      CORRECTED COPY. {len(config['patches'])} corrections based on live "
+          f"observations dated {config['verified_at']}, plus 404 responses on "
           f"{added} list routes. The upstream document is openapi.json, and the "
-          f"corrections are listed in spec-patches.json and reference/observed.md.\n      ")
+          f"corrections are listed in spec-patches.json and reference/observed.md. "
+          f"Upstream reviewed on {config['upstream_checked_at']}; later write "
+          f"response changes remain unverified.\n      ")
     document["info"]["x-corrections-verified-at"] = config["verified_at"]
+    document["info"]["x-upstream-checked-at"] = config["upstream_checked_at"]
     document["info"]["x-corrections-source"] = "spec-patches.json"
     document["info"]["x-upstream"] = {
         "source": "https://api.hevyapp.com/docs",

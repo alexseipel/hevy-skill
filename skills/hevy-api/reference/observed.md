@@ -1,9 +1,14 @@
-# Where the spec is wrong
+# Live observations and upstream changes
 
-The published [openapi.json](../openapi.json) disagrees with the live API in
-eighteen places. Every read-only row re-runs with `scripts/verify_live.py`,
-last on **2026-08-24**. Rows 11 to 13 need writes and were verified once on
-2026-08-23 ([write behaviour](#write-behaviour)).
+The [upstream spec](../openapi.json) was refreshed from
+[Hevy's Swagger bundle](https://api.hevyapp.com/docs/swagger-ui-init.js) on
+**2026-10-27**. All 22 operations remain, and twelve patches are now redundant.
+The numbered observations below retain their original numbering for links.
+
+Read checks last ran on **2026-10-27** with `scripts/verify_live.py`.
+Successful writes were last tested on 2026-08-23
+([write behaviour](#write-behaviour)), so a new specification is not evidence
+that a write response was tested again.
 
 Re-run the check before trusting a row:
 
@@ -11,26 +16,26 @@ Re-run the check before trusting a row:
 HEVY_API_KEY=... python3 scripts/verify_live.py
 ```
 
-**[openapi.corrected.json](../openapi.corrected.json) has all of this applied.**
+**[openapi.corrected.json](../openapi.corrected.json) applies the remaining corrections.**
 It also adds the two things upstream omits entirely: a `servers` entry and an
 `api-key` security scheme. Without those, a generated client knows neither
 where to send a request nor how to authenticate.
 
-| # | Where | The spec says | The API does |
+| # | Where | Original spec | Observation and current status |
 | - | ----- | ------------- | ------------ |
-| 1 | `Exercise` in every response | `supersets_id` | **`superset_id`**, matching the request field |
-| 2 | `Routine.exercises[].rest_seconds` | `string` | **integer**, such as `120` |
-| 3 | `ExerciseTemplate` | `equipment_category` | **`equipment`** |
-| 4 | `pageSize` default | `5` on most list routes | **the route's own cap**, except folders |
+| 1 | `Exercise` in every response | `supersets_id` | **`superset_id`**, matching the request field. Fixed upstream |
+| 2 | `Routine.exercises[].rest_seconds` | `string` | **integer or null**. Fixed upstream |
+| 3 | `ExerciseTemplate` | `equipment_category` | **`equipment`**. Fixed upstream |
+| 4 | `pageSize` default | `5` on most list routes | **the route's own cap**, formerly except folders. Defaults updated upstream |
 | 5 | `page` below 1 | `400` | **`0` returns page 1**, `-1` returns `400` |
 | 6 | `page` past the end | `400` on most routes | **`404`** everywhere |
 | 7 | `BodyMeasurement` | `date` plus measurement fields | adds **`id`** and **`created_at`**, and omits null fields |
-| 8 | `Workout.routine_id` | `string` | **nullable**, `null` for an unplanned workout |
+| 8 | `Workout.routine_id` | `string` | **nullable**, `null` for an unplanned workout. Fixed upstream |
 | 9 | Timestamp format | `2021-09-14T12:00:00Z` everywhere | **two formats**, see below |
 | 10 | `GET /v1/workouts/events` | `since` defaults to the epoch | **omitting `since` returns no events at all** |
-| 11 | every write that returns a body | returns the bare object | **wrapped in a key**, and for workouts and routines inside an array |
+| 11 | every write that returns a body | returns the bare object | **wrapped in a key**. Workout create fixed upstream, routine writes now document an object |
 | 12 | `POST /v1/exercise_templates` | `{"id": <integer>}` | **a bare UUID string as `text/html`** |
-| 13 | `POST /v1/body_measurements` | `200` | **`201`** |
+| 13 | `POST /v1/body_measurements` | `200` | **`201`**. Fixed upstream |
 | 14 | `GET /v1/workouts/events` with nothing to report | `events: []` | **a `workouts` key instead**, and no `events` at all |
 | 15 | `GET /v1/routines/{routineId}`, unknown id | `200` and `400` only | **`404`**, like every other single-item GET |
 | 16 | a wrong or missing key | no `401` documented | **the plain string `InvalidApiKey` as `text/html`**, never JSON |
@@ -39,17 +44,17 @@ where to send a request nor how to authenticate.
 
 ## 1. The superset field is not renamed
 
-The spec's response schema calls it `supersets_id`, a field the API never
-sends. Workout and routine exercises both return `superset_id`, the same name
-the request body uses, so a read-edit-write round trip needs no rename.
+The current response schemas use `superset_id`, matching requests and the
+live API. The old `supersets_id` spelling was fixed upstream by 2026-10-27,
+so the three rename patches were removed.
 
 **A superset id can be `0`.** It is an index, not a database id, so a falsy
 check drops the first superset of every workout. Test against `null`.
 
 ## 2. `rest_seconds` is a number
 
-The spec types it `string` while giving `60` as the example. The API sends an
-integer.
+The current spec types `rest_seconds` as a nullable integer. Its old `string`
+type was fixed upstream by 2026-10-27, so the type patch was removed.
 
 ## 3. Exercise templates carry `equipment`
 
@@ -59,22 +64,30 @@ integer.
   "equipment": "barbell", "is_custom": false }
 ```
 
-The values match the spec's `EquipmentCategory` enum. Only the field name is
-different, and only when reading: creating a custom exercise still sends
-`equipment_category`.
+The values match the spec's `EquipmentCategory` enum. The response schema now
+uses `equipment`, so its rename patch was removed on 2026-10-27. Creating a
+custom exercise still sends `equipment_category`.
 
-## 4. The default page size is the cap, not 5
+## 4. Page size defaults
 
-| Route | Spec default | Observed default | Cap |
-| ----- | ------------ | ---------------- | --- |
-| `/v1/workouts` | 5 | **10** | 10 |
-| `/v1/routines` | 5 | **10** | 10 |
-| `/v1/exercise_templates` | 5 | **100** | 100 |
-| `/v1/routine_folders` | 5 | 5 | 10 |
-| `/v1/body_measurements` | 10 | 10 | 10 |
-| `/v1/workouts/events` | 5 | **10** | 10 |
+The current spec defaults every list route to its cap. The four old default
+patches were removed on 2026-10-27.
 
-Send `pageSize` explicitly rather than relying on either number.
+| Route | Current default | Cap |
+| ----- | --------------- | --- |
+| `/v1/workouts` | 10 | 10 |
+| `/v1/routines` | 10 | 10 |
+| `/v1/exercise_templates` | 100 | 100 |
+| `/v1/routine_folders` | 10 | 10 |
+| `/v1/body_measurements` | 10 | 10 |
+| `/v1/workouts/events` | 10 | 10 |
+
+Folders previously defaulted to 5. A request without `pageSize` returned
+seven folders on 2026-10-27, confirming that 5 no longer holds. The default
+of 10 comes from the current spec: this account has too few folders to prove it.
+
+Send `pageSize` explicitly. The verifier reports a skipped default check when
+there are too few records to fill multiple pages.
 
 ## 5 and 6. Page bounds
 
@@ -110,8 +123,8 @@ you sent comes back unchanged.
 ## 8. `routine_id` is nullable
 
 A workout logged without a routine comes back with `routine_id: null`. The
-spec types the field as a plain `string`, and the corrected spec adds
-`nullable: true`.
+current spec includes `nullable: true`, so the old patch was removed on
+2026-10-27.
 
 ## 9. Two timestamp formats in one object
 
@@ -137,28 +150,26 @@ corrected spec drops the false value rather than replacing it.
 
 ## 11. Writes answer with the object wrapped, and in an array
 
-`POST /v1/workouts` and `PUT /v1/workouts/{workoutId}` both return
+The live writes on 2026-08-23 returned `{"workout": [ {...} ]}` for workout
+creates and updates, and `{"routine": [ {...} ]}` for routine writes.
+The array held one element.
 
-```json
-{ "workout": [ { "id": "…", "title": "…", "exercises": [] } ] }
-```
+The spec fetched on 2026-10-27 now documents the workout create wrapper.
+It describes routine writes as `{"routine": {...}}`, with an object instead
+of the previously observed array. No successful write was repeated during
+this refresh, so that change remains unverified against the live API.
 
-and the routine routes return the same shape under `"routine"`. The spec
-declares a bare `Workout` and `Routine`, so `response.id` is undefined and a
-generated client reads nothing.
-
-**The array holds one element.** Three shapes are in play, and nothing in the
-spec distinguishes them:
-
-| Route | Shape |
-| ----- | ----- |
-| `POST`/`PUT` workouts and routines | `{"workout": [ {...} ]}`, a one-element array |
-| `POST /v1/routine_folders` | `{"routine_folder": {...}}`, an object |
-| `GET /v1/routines/{routineId}` | `{"routine": {...}}`, an object |
+| Route | Shape to handle |
+| ----- | --------------- |
+| `POST`/`PUT` workouts | `{"workout": [ {...} ]}`, a one-element array |
+| `POST`/`PUT` routines | `{"routine": {...}}` in the current spec, or the earlier observed array |
+| `POST /v1/routine_folders` | `{"routine_folder": {...}}`, observed 2026-08-23 |
+| `GET /v1/routines/{routineId}` | `{"routine": {...}}`, checked 2026-10-27 |
 | every other `GET` for one item | the bare object |
 
-The read and write shapes of one resource differ, so a shared unwrapping helper
-must know which it is looking at.
+The corrected spec uses `oneOf` for the two routine write shapes. Accept
+either until an authorised write confirms which the server currently returns.
+The client passes the decoded response through unchanged.
 
 ## 12. Creating an exercise template answers with plain text
 
@@ -175,7 +186,8 @@ the new template's id, a UUID string like every other, not an integer.
 
 ## 13. Creating a measurement answers `201`
 
-The spec documents `200`. The body is empty either way, so read the entry back
+The spec now documents `201` with an empty body, matching the write observed
+on 2026-08-23. The status patch was removed on 2026-10-27. Read the entry back
 with `GET /v1/body_measurements/{date}` when you need the stored values.
 
 ## 14. An empty events feed answers with the wrong key
@@ -233,6 +245,20 @@ on `json.loads`, so read the status first and the body as text. Observed
 where the spec declares `error` as a string. `POST /v1/body_measurements` does
 send a string, but the string is itself a JSON document, so neither route gives
 a message you can show a user. Observed 2026-08-24.
+
+## Fields added in the current spec
+
+`UserInfo` now documents `username`, `weight_unit`, `distance_unit` and
+`is_pro`. `ExerciseTemplate` adds nullable `thumbnail_url`. Their presence
+and types were checked on 2026-10-27 through user info and both template GETs.
+
+Routine sets no longer document `rpe`, and routine exercises allow null
+`rest_seconds` and `notes`. Workout descriptions and exercise notes are also
+nullable. The live verifier checks routine set fields when the account has sets.
+
+`PostWorkoutsRequestBody` now requires `workout`, and its object requires
+`title`, `start_time`, `end_time` and `exercises`. `is_private` is optional
+and defaults to `false`, according to the current spec.
 
 ## An unknown id is not always a 404
 

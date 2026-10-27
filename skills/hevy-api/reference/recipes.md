@@ -42,8 +42,9 @@ python3 scripts/hevy.py summary --weeks 4 --unit lb
 
 **Skip warmup sets from volume.** Including them inflates it by roughly a fifth.
 
-**Say what unit the figures are in.** The API answers in kilograms and reports
-nothing about what the account displays ([objects.md](objects.md#units)).
+**Say what unit the figures are in.** The API answers in kilograms. Read
+`weight_unit` from `/v1/user/info` for the account preference
+([objects.md](objects.md#units)).
 `--unit lb` renames every key as it converts, so a `volume_lb` cannot be read as
 a `volume_kg`.
 
