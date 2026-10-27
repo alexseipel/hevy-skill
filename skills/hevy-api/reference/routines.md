@@ -11,7 +11,7 @@ differences: a routine set adds `rep_range`, and a routine exercise adds
 | ---------- | ------ | ------- | ------------ |
 | `api-key`  | header | —       | required     |
 | `page`     | query  | 1       | 1 or greater |
-| `pageSize` | query  | 10      | maximum 10. The spec's default of 5 is wrong ([observed.md](observed.md)) |
+| `pageSize` | query  | 10      | maximum 10 |
 
 ```bash
 curl -s "https://api.hevyapp.com/v1/routines?pageSize=10" -H "api-key: $HEVY_API_KEY"
@@ -26,11 +26,21 @@ it at the top.
 
 ## POST /v1/routines
 
-Returns `201`. The response arrives as `{"routine": [ {...} ]}`, wrapped in a
-key and inside an array rather than the bare `Routine` the spec promises
-([observed.md](observed.md#11-writes-answer-with-the-object-wrapped-and-in-an-array)),
-so read the created routine from `body.routine[0]`. The request body wraps
-everything in a `routine` key too.
+Returns `201`. The current [spec](../openapi.json) declares
+`{"routine": {...}}`, with the routine as an object. Live writes on
+2026-08-23 returned `{"routine": [{...}]}` instead, and successful writes
+were not repeated during the 2026-10-27 refresh.
+
+Handle both shapes until re-verified
+([observed.md](observed.md#11-writes-answer-with-the-object-wrapped-and-in-an-array)):
+
+```python
+routine = body["routine"]
+if isinstance(routine, list):
+    routine = routine[0]
+```
+
+The request body wraps everything in a `routine` key too.
 
 | Field       | Type               | Notes                                            |
 | ----------- | ------------------ | ------------------------------------------------ |
@@ -74,8 +84,8 @@ curl -s "https://api.hevyapp.com/v1/routines/$ROUTINE_ID" -H "api-key: $HEVY_API
 template equivalents return the object bare, so a shared unwrapping helper has
 to special-case it.
 
-Here the wrapper holds an object. On `POST` and `PUT` the same key holds a
-one-element array, so the read and write shapes of one resource differ.
+Here the wrapper holds an object. For writes, handle both the documented
+object and the previously observed array.
 
 The spec documents `400` here rather than `404`. The body is
 `{"error": "Routine not found"}` as JSON, unlike the plain-text `404`s on
@@ -106,7 +116,7 @@ list. Ids are numbers here, unlike the UUID strings every other resource uses.
 | ---------- | ------ | ------- | ------------ |
 | `api-key`  | header | —       | required     |
 | `page`     | query  | 1       | 1 or greater |
-| `pageSize` | query  | 5       | maximum 10   |
+| `pageSize` | query  | 10      | maximum 10   |
 
 ```bash
 curl -s "https://api.hevyapp.com/v1/routine_folders" -H "api-key: $HEVY_API_KEY"
@@ -115,8 +125,8 @@ curl -s "https://api.hevyapp.com/v1/routine_folders" -H "api-key: $HEVY_API_KEY"
 
 ### POST /v1/routine_folders
 
-Returns `201` as `{"routine_folder": { … }}`, wrapped in a key but holding an
-object rather than the one-element array the workout and routine writes return
+Returns `201` as `{"routine_folder": { … }}`, wrapped in a key and holding an
+object, as observed on 2026-08-23
 ([observed.md](observed.md#11-writes-answer-with-the-object-wrapped-and-in-an-array)).
 `title` is the only field you send.
 

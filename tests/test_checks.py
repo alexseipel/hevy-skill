@@ -9,11 +9,15 @@ no judgement in them are exercised in both directions.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
+import json
 import pathlib
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 VALIDATE = ROOT / "scripts" / "validate_skill.py"
@@ -31,10 +35,63 @@ def load(path: pathlib.Path, name: str):
 
 
 validate = load(VALIDATE, "validate_skill_under_test")
+builder = load(ROOT / "scripts" / "build_corrected_spec.py", "spec_builder_under_test")
 
 
 def frontmatter(*lines: str) -> str:
     return "---\n" + "\n".join(lines) + "\n---\n\n# Body\n"
+
+
+class CorrectedSpecTest(unittest.TestCase):
+    def build(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            return json.loads(builder.build(False))
+
+    def test_current_upstream_builds_and_preserves_new_fields(self):
+        document = self.build()
+        schemas = document["components"]["schemas"]
+        self.assertIn("superset_id", schemas["Exercise"]["properties"])
+        self.assertNotIn("supersets_id", schemas["Exercise"]["properties"])
+        self.assertIn("thumbnail_url", schemas["ExerciseTemplate"]["properties"])
+        self.assertTrue({"username", "weight_unit", "distance_unit", "is_pro"}
+                        <= schemas["UserInfo"]["properties"].keys())
+        for item in document["paths"].values():
+            params = item.get("get", {}).get("parameters", [])
+            for param in params:
+                if param["name"] == "pageSize":
+                    self.assertEqual(param["schema"]["default"], param["schema"]["maximum"])
+
+    def test_routine_write_schema_keeps_documented_and_observed_shapes(self):
+        document = self.build()
+        for route, method, status in (("/v1/routines", "post", "201"),
+                                      ("/v1/routines/{routineId}", "put", "200")):
+            schema = document["paths"][route][method]["responses"][status]["content"]["application/json"]["schema"]
+            variants = schema["properties"]["routine"]["oneOf"]
+            self.assertEqual(variants[0], {"$ref": "#/components/schemas/Routine"})
+            self.assertEqual(variants[1]["type"], "array")
+            self.assertEqual(variants[1]["items"], variants[0])
+            self.assertEqual((variants[1]["minItems"], variants[1]["maxItems"]), (1, 1))
+
+    def test_a_new_upstream_fix_still_fails_instead_of_silently_skipping(self):
+        upstream = json.loads(builder.UPSTREAM.read_text())
+        upstream["servers"] = [{"url": "https://api.hevyapp.com"}]
+        config = json.loads(builder.PATCHES.read_text())
+        with self.assertRaisesRegex(builder.PatchError, "add-servers.*already exists"):
+            builder.apply_patch(upstream, config["patches"][0])
+
+    def test_fetch_rebuilds_from_the_downloaded_spec(self):
+        upstream = json.loads(builder.UPSTREAM.read_text())
+        upstream["info"]["title"] = "Updated upstream title"
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "openapi.json"
+            with mock.patch.object(builder, "ROOT", pathlib.Path(directory)), \
+                 mock.patch.object(builder, "UPSTREAM", path), \
+                 mock.patch.object(builder, "fetch_upstream", return_value=upstream), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                document = json.loads(builder.build(True))
+            self.assertEqual(json.loads(path.read_text()), upstream)
+            self.assertEqual(document["info"]["title"], "Updated upstream title")
+            self.assertEqual(document["security"], [{"ApiKey": []}])
 
 
 class FrontmatterYamlTest(unittest.TestCase):

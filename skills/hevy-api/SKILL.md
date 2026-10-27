@@ -8,8 +8,8 @@ license: MIT
 
 A read-and-write REST API over one Hevy account. Every route is under
 `https://api.hevyapp.com/v1`, takes the key in an `api-key` header, returns
-JSON, and acts on the account that owns the key. There is no OAuth, no user
-scoping and no delete route.
+JSON except where noted, and acts on the account that owns the key. There is
+no OAuth, no user scoping and no delete route.
 
 **The API is available to Hevy Pro accounts only.** The key is issued at
 `https://hevy.com/settings?developer`.
@@ -20,7 +20,7 @@ scoping and no delete route.
 export HEVY_API_KEY="…"   # from https://hevy.com/settings?developer
 
 curl -s "https://api.hevyapp.com/v1/user/info" -H "api-key: $HEVY_API_KEY"
-# {"data":{"id":"9c465af3-…","name":"John doe","url":"https://hevy.com/user/jhon"}}
+# {"data":{"id":"9c465af3-…","username":"jhon","name":"John doe","url":"https://hevy.com/user/jhon","weight_unit":"kg","distance_unit":"kilometers","is_pro":true}}
 ```
 
 Never put the key in a URL, a source file or a committed fixture.
@@ -45,16 +45,16 @@ All 22, grouped by resource. Every one requires the `api-key` header.
 | Method | Path                       | Returns                          |
 | ------ | -------------------------- | -------------------------------- |
 | GET    | `/v1/routines`             | `{page, page_count, routines[]}` |
-| POST   | `/v1/routines`             | `201`, as `{routine: [ … ]}`     |
+| POST   | `/v1/routines`             | `201`, `{routine: …}`, see reference     |
 | GET    | `/v1/routines/{routineId}` | `{routine}`, wrapped             |
-| PUT    | `/v1/routines/{routineId}` | `200`, as `{routine: [ … ]}`     |
+| PUT    | `/v1/routines/{routineId}` | `200`, `{routine: …}`, see reference     |
 
 ### [Routine folders](reference/routines.md#routine-folders)
 
 | Method | Path                          | Returns                                 |
 | ------ | ----------------------------- | --------------------------------------- |
 | GET    | `/v1/routine_folders`         | `{page, page_count, routine_folders[]}` |
-| POST   | `/v1/routine_folders`         | `201` with the created `RoutineFolder`  |
+| POST   | `/v1/routine_folders`         | `201`, `{routine_folder: …}`  |
 | GET    | `/v1/routine_folders/{folderId}` | a `RoutineFolder`                    |
 
 ### [Exercise templates and history](reference/exercises.md)
@@ -79,7 +79,7 @@ All 22, grouped by resource. Every one requires the `api-key` header.
 
 | Method | Path            | Returns                        |
 | ------ | --------------- | ------------------------------ |
-| GET    | `/v1/user/info` | `{data: {id, name, url}}`      |
+| GET    | `/v1/user/info` | `{data: {id, username, name, url, weight_unit, distance_unit, is_pro}}`      |
 
 ## Pagination
 
@@ -87,18 +87,17 @@ Every list route takes `page` and `pageSize` as query parameters and answers
 with `page` and `page_count`. Pages are 1-based, and `pageSize` caps differ per
 route:
 
-| Route                    | Observed default | Maximum |
+| Route                    | Documented default | Maximum |
 | ------------------------ | ---------------- | ------- |
 | `/v1/workouts`           | 10               | 10      |
 | `/v1/workouts/events`    | 10               | 10      |
 | `/v1/routines`           | 10               | 10      |
-| `/v1/routine_folders`    | 5                | 10      |
+| `/v1/routine_folders`    | 10               | 10      |
 | `/v1/exercise_templates` | 100              | 100     |
 | `/v1/body_measurements`  | 10               | 10      |
 
-**The spec's default of 5 is wrong on four routes**, which default to their
-caps instead ([reference/observed.md](reference/observed.md)). Send `pageSize`
-explicitly.
+Send `pageSize` explicitly. These defaults come from the spec fetched on
+2026-10-27 ([reference/observed.md](reference/observed.md#4-page-size-defaults)).
 
 Exceeding the cap returns `400`. Loop while `page <= page_count`, reading
 `page_count` from the first response. A page past the last returns `404`, and
@@ -164,14 +163,15 @@ every omitted field to `null`. Read, merge, send the whole object back.
 - **A superset id can be `0`.** It indexes supersets within one workout, so
   `if (superset_id)` drops the first superset of every workout. Test against
   `null`.
-- **The published spec is wrong in eighteen places**, including the superset
-  field name and four `pageSize` defaults
+- **The corrected spec retains patches for unresolved differences.** Upstream
+  has fixed the superset field and pagination defaults
   ([reference/observed.md](reference/observed.md)).
 - **`GET /v1/routines/{routineId}` wraps its result in `{routine: …}`**, while
   the workout, folder and template equivalents return the object bare.
-- **Write responses are wrapped inside an array.** Creating or updating a
-  workout returns `{"workout": [ {...} ]}`, and routines behave the same way.
-  Read `body.workout[0]`.
+- **Workout write responses contain an array.** Read `body.workout[0]`.
+  Routine writes now document `body.routine` as an object, but earlier live
+  writes returned an array. Handle both until re-verified
+  ([reference/routines.md](reference/routines.md)).
 - **`POST /v1/exercise_templates` does not return JSON.** The body is the new
   template's UUID as plain text, served as `text/html`.
 - **A read cannot be written back untouched.** The write schemas reject
@@ -180,11 +180,9 @@ every omitted field to `null`. Read, merge, send the whole object back.
 - **`rpe` accepts only `6, 7, 7.5, 8, 8.5, 9, 9.5, 10`** or `null`.
 - **Reading a template gives `equipment`**, while creating one takes
   `equipment_category`.
-- **Every value is metric, and the API never says what the user sees.**
-  Kilograms, metres, centimetres. Hevy displays pounds and miles on request,
-  per exercise as well as globally, and no route reports that preference, so
-  **convert before quoting a number back**
-  ([reference/objects.md](reference/objects.md#units)).
+- **Training values use metric units.** Read `weight_unit` and `distance_unit`
+  from `/v1/user/info`, then convert for display. Per-exercise unit overrides
+  are absent from the schema ([reference/objects.md](reference/objects.md#units)).
 - **A dumbbell weight is the total lifted per rep**, as Hevy's app instructs: a
   pair of 10 kg dumbbells goes in as 20 kg. People log one hand instead and
   nothing distinguishes them, so such an account understates its volume
@@ -207,6 +205,8 @@ every omitted field to `null`. Read, merge, send the whole object back.
   The status returned for a longer one is unmeasured.
 - **The API is explicitly unstable.** Its own documentation says the structure
   may change or the project may be abandoned, so pin behaviour with tests.
+- **Schedule repeated fetches away from `xx:00`.** Hevy asks callers to choose
+  a random minute in its [API documentation](https://api.hevyapp.com/docs).
 
 ## The local mirror is off, and stays off unless asked
 
@@ -265,7 +265,7 @@ mirror.
 | [reference/exercises.md](reference/exercises.md)         | templates and exercise history, four routes       |
 | [reference/measurements.md](reference/measurements.md)   | body measurements, four routes                    |
 | [reference/user.md](reference/user.md)                   | the account route, and what it does not expose    |
-| [reference/observed.md](reference/observed.md)           | where the published spec is wrong, row by row     |
+| [reference/observed.md](reference/observed.md)           | live observations, upstream fixes and open differences |
 | [reference/recipes.md](reference/recipes.md)             | the multi-call workflows: search, summary, sync   |
 | [openapi.json](openapi.json)                             | the pinned upstream spec, kept unedited            |
 | [openapi.corrected.json](openapi.corrected.json)         | the same spec with the corrections applied         |

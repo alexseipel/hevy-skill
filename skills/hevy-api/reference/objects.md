@@ -16,11 +16,11 @@ Returned inside `Workout.exercises[].sets[]` and `Routine.exercises[].sets[]`.
 | `reps`             | number, null  |                                                  |
 | `distance_meters`  | number, null  | metres                                           |
 | `duration_seconds` | number, null  |                                                  |
-| `rpe`              | number, null  | rating of perceived exertion                     |
+| `rpe`              | number, null  | rating of perceived exertion, workout sets only  |
 | `custom_metric`    | number, null  | floors or steps, for stair-machine exercises     |
 
-A routine set carries one more field: `rep_range`, an object of `{start, end}`
-or `null`.
+A routine set carries `rep_range`, an object of `{start, end}` or `null`,
+instead of `rpe`.
 
 ## Set (in a request)
 
@@ -48,16 +48,15 @@ A routine set has no `rpe`, and a workout set has no `rep_range`.
 | ---------------------- | ------------ | ---------------------------------------------- |
 | `index`                | number       | position within the workout or routine, from 0 |
 | `title`                | string       | resolved from the template, such as `Bench Press (Barbell)` |
-| `notes`                | string       |                                                |
+| `notes`                | string, null |                                                |
 | `exercise_template_id` | string       | use it against `/v1/exercise_templates/{id}`   |
 | `superset_id`          | number, null | `null` means the exercise is not in a superset |
 | `sets`                 | Set[]        |                                                |
 
-A routine exercise adds `rest_seconds`, an integer such as `120`.
+A routine exercise adds `rest_seconds`, an integer such as `120`, or `null`.
 
-The spec calls the response field `supersets_id` and types `rest_seconds` as a
-string. Both are wrong ([observed.md](observed.md)). A superset id can be `0`,
-so test it against `null` rather than for truthiness.
+A superset id can be `0`, so test it against `null` rather than for truthiness
+([observed.md](observed.md#1-the-superset-field-is-not-renamed)).
 
 ## Exercise (in a request)
 
@@ -81,7 +80,7 @@ unrecognized keys ([observed.md](observed.md#write-behaviour)).
 | `id`          | string     | UUID                                        |
 | `title`       | string     |                                             |
 | `routine_id`  | string, null | the routine it came from, `null` if none  |
-| `description` | string     |                                             |
+| `description` | string, null |                                           |
 | `start_time`  | string     | ISO 8601                                    |
 | `end_time`    | string     | ISO 8601                                    |
 | `updated_at`  | string     | ISO 8601                                    |
@@ -124,8 +123,9 @@ the same way `is_private` behaves on a workout.
 | `type`                    | string            | one of the exercise types below              |
 | `primary_muscle_group`    | string            | one muscle group                             |
 | `secondary_muscle_groups` | string[]          |                                              |
-| `equipment`               | EquipmentCategory | the spec calls this `equipment_category`     |
+| `equipment`               | EquipmentCategory |                                              |
 | `is_custom`               | boolean           | `true` for exercises the account created     |
+| `thumbnail_url`           | string, null      | image URL, or `null` when absent             |
 
 ## ExerciseHistoryEntry
 
@@ -217,7 +217,8 @@ Nothing in the API enforces it and nothing marks an account that does otherwise
 
 ## Units
 
-**The API is metric everywhere, and silent about what the account displays.**
+**Training payloads use metric units.** The account's display preferences come
+from [GET /v1/user/info](user.md).
 
 | Field | Unit |
 | ----- | ---- |
@@ -226,10 +227,9 @@ Nothing in the API enforces it and nothing marks an account that does otherwise
 | every `_cm` measurement | centimetres |
 | `duration_seconds` | seconds |
 
-Hevy shows pounds and miles to an account that asks for it, and the app also
-sets units per exercise rather than only globally. **No route reports either
-setting.** `GET /v1/user/info` returns an id, a name and a profile URL, and
-nothing else, so a client cannot discover what its user sees.
+`weight_unit` is `kg` or `lbs`, and `distance_unit` is `kilometers` or `miles`.
+These preferences do not change the units in API payloads. Per-exercise unit
+overrides are not exposed by the current schema.
 
 The consequence is practical: a number read off the phone will not match the
 API for anyone on imperial units, and neither side is wrong. Convert when you

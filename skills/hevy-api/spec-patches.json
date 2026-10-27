@@ -2,6 +2,7 @@
   "_comment": "Corrections applied to Hevy's published OpenAPI document. Each patch asserts what it expects to find, so a patch that stops matching means upstream changed and the correction needs re-checking rather than silently reapplying. See reference/observed.md for how each was verified.",
   "upstream": "https://api.hevyapp.com/docs/swagger-ui-init.js",
   "verified_at": "2026-08-24",
+  "upstream_checked_at": "2026-10-27",
   "patches": [
     {
       "id": "add-servers",
@@ -48,55 +49,6 @@
       "expect_count": 22
     },
     {
-      "id": "superset-field-exercise",
-      "why": "The live API returns superset_id, matching the request field. The spec's supersets_id names a field the API never sends.",
-      "op": "rename-key",
-      "pointer": "/components/schemas/Exercise/properties",
-      "from": "supersets_id",
-      "to": "superset_id"
-    },
-    {
-      "id": "superset-field-workout",
-      "why": "Same correction in the Workout schema's inline exercise object.",
-      "op": "rename-key",
-      "pointer": "/components/schemas/Workout/properties/exercises/items/properties",
-      "from": "supersets_id",
-      "to": "superset_id"
-    },
-    {
-      "id": "superset-field-routine",
-      "why": "Same correction in the Routine schema's inline exercise object.",
-      "op": "rename-key",
-      "pointer": "/components/schemas/Routine/properties/exercises/items/properties",
-      "from": "supersets_id",
-      "to": "superset_id"
-    },
-    {
-      "id": "rest-seconds-type",
-      "why": "Typed as a string while the spec's own example is 60. The API sends an integer.",
-      "op": "replace",
-      "pointer": "/components/schemas/Routine/properties/exercises/items/properties/rest_seconds/type",
-      "from": "string",
-      "to": "integer"
-    },
-    {
-      "id": "equipment-field-name",
-      "why": "Reading a template gives equipment. Only the create request uses equipment_category, and that one is left alone.",
-      "op": "rename-key",
-      "pointer": "/components/schemas/ExerciseTemplate/properties",
-      "from": "equipment_category",
-      "to": "equipment"
-    },
-    {
-      "id": "routine-id-nullable",
-      "why": "A workout logged without a routine returns routine_id: null.",
-      "op": "merge",
-      "pointer": "/components/schemas/Workout/properties/routine_id",
-      "value": {
-        "nullable": true
-      }
-    },
-    {
       "id": "measurement-id",
       "why": "Every body measurement carries an integer id the spec omits. It is not accepted on write.",
       "op": "add",
@@ -121,46 +73,6 @@
       }
     },
     {
-      "id": "page-size-default-workouts",
-      "why": "The observed default is the route's cap, not 5.",
-      "op": "set-parameter-default",
-      "route": "/v1/workouts",
-      "method": "get",
-      "parameter": "pageSize",
-      "from": 5,
-      "to": 10
-    },
-    {
-      "id": "page-size-default-routines",
-      "why": "The observed default is the route's cap, not 5.",
-      "op": "set-parameter-default",
-      "route": "/v1/routines",
-      "method": "get",
-      "parameter": "pageSize",
-      "from": 5,
-      "to": 10
-    },
-    {
-      "id": "page-size-default-templates",
-      "why": "The observed default is the route's cap, not 5.",
-      "op": "set-parameter-default",
-      "route": "/v1/exercise_templates",
-      "method": "get",
-      "parameter": "pageSize",
-      "from": 5,
-      "to": 100
-    },
-    {
-      "id": "page-size-default-events",
-      "why": "The observed default is the route's cap, not 5. Measured with since at the epoch, so the page could fill.",
-      "op": "set-parameter-default",
-      "route": "/v1/workouts/events",
-      "method": "get",
-      "parameter": "pageSize",
-      "from": 5,
-      "to": 10
-    },
-    {
       "id": "since-default-dropped",
       "why": "The spec defaults since to the epoch, but omitting it returns nothing: 0 events and page_count 1 on an account with hundreds of workouts, observed 2026-08-23. Whether the server substitutes a recent default or matches nothing was not determined. The false default is dropped so a generated client sends since explicitly.",
       "op": "drop-parameter-default",
@@ -168,26 +80,6 @@
       "method": "get",
       "parameter": "since",
       "from": "1970-01-01T00:00:00Z"
-    },
-    {
-      "id": "workout-create-response-wrapped",
-      "why": "POST /v1/workouts returns {\"workout\": [Workout]}, not the bare Workout the spec declares. Observed 2026-08-23.",
-      "op": "replace",
-      "pointer": "/paths/~1v1~1workouts/post/responses/201/content/application~1json/schema",
-      "from": { "$ref": "#/components/schemas/Workout" },
-      "to": {
-        "type": "object",
-        "required": ["workout"],
-        "properties": {
-          "workout": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/Workout" },
-            "minItems": 1,
-            "maxItems": 1,
-            "description": "The created workout, as the array's only element."
-          }
-        }
-      }
     },
     {
       "id": "workout-update-response-wrapped",
@@ -211,40 +103,76 @@
     },
     {
       "id": "routine-create-response-wrapped",
-      "why": "POST /v1/routines returns {\"routine\": [Routine]}, not the bare Routine the spec declares. Observed 2026-08-23.",
+      "why": "Upstream fetched 2026-10-27 declares a routine object. Live writes on 2026-08-23 returned a one-element array. Preserve both shapes until a new authorised write resolves the difference; writes were not repeated during this refresh.",
       "op": "replace",
       "pointer": "/paths/~1v1~1routines/post/responses/201/content/application~1json/schema",
-      "from": { "$ref": "#/components/schemas/Routine" },
-      "to": {
+      "from": {
         "type": "object",
-        "required": ["routine"],
         "properties": {
           "routine": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/Routine" },
-            "minItems": 1,
-            "maxItems": 1,
-            "description": "The created routine, as the array's only element."
+            "$ref": "#/components/schemas/Routine"
+          }
+        }
+      },
+      "to": {
+        "type": "object",
+        "required": [
+          "routine"
+        ],
+        "properties": {
+          "routine": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Routine"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Routine"
+                },
+                "minItems": 1,
+                "maxItems": 1,
+                "description": "The created routine, as the array's only element."
+              }
+            ]
           }
         }
       }
     },
     {
       "id": "routine-update-response-wrapped",
-      "why": "PUT /v1/routines/{routineId} wraps its response the same way as the create. Observed 2026-08-23.",
+      "why": "Upstream fetched 2026-10-27 declares a routine object. Live writes on 2026-08-23 returned a one-element array. Preserve both shapes until a new authorised write resolves the difference; writes were not repeated during this refresh.",
       "op": "replace",
       "pointer": "/paths/~1v1~1routines~1{routineId}/put/responses/200/content/application~1json/schema",
-      "from": { "$ref": "#/components/schemas/Routine" },
-      "to": {
+      "from": {
         "type": "object",
-        "required": ["routine"],
         "properties": {
           "routine": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/Routine" },
-            "minItems": 1,
-            "maxItems": 1,
-            "description": "The updated routine, as the array's only element."
+            "$ref": "#/components/schemas/Routine"
+          }
+        }
+      },
+      "to": {
+        "type": "object",
+        "required": [
+          "routine"
+        ],
+        "properties": {
+          "routine": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Routine"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Routine"
+                },
+                "minItems": 1,
+                "maxItems": 1,
+                "description": "The updated routine, as the array's only element."
+              }
+            ]
           }
         }
       }
@@ -292,14 +220,6 @@
           }
         }
       }
-    },
-    {
-      "id": "measurement-create-201",
-      "why": "POST /v1/body_measurements answers 201, not the 200 the spec documents. Observed 2026-08-23.",
-      "op": "rename-key",
-      "pointer": "/paths/~1v1~1body_measurements/post/responses",
-      "from": "200",
-      "to": "201"
     },
     {
       "id": "routine-get-404",

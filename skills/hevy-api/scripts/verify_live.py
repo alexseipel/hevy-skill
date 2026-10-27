@@ -142,6 +142,15 @@ def main() -> int:
     if not os.environ.get("HEVY_API_KEY"):
         sys.exit("HEVY_API_KEY is not set.")
 
+    results.clear()
+    user = call_dict("/v1/user/info").get("data", {})
+    check("user info carries username", str, type(user.get("username")))
+    check("user info carries weight_unit as kg or lbs", True,
+          user.get("weight_unit") in ("kg", "lbs"))
+    check("user info carries distance_unit as kilometers or miles", True,
+          user.get("distance_unit") in ("kilometers", "miles"))
+    check("user info carries is_pro", bool, type(user.get("is_pro")))
+
     caps = {"/v1/workouts": 10, "/v1/workouts/events": 10, "/v1/routines": 10,
             "/v1/routine_folders": 10, "/v1/exercise_templates": 100,
             "/v1/body_measurements": 10}
@@ -155,7 +164,7 @@ def main() -> int:
     defaults = {"/v1/workouts": ("workouts", 10, {}),
                 "/v1/routines": ("routines", 10, {}),
                 "/v1/exercise_templates": ("exercise_templates", 100, {}),
-                "/v1/routine_folders": ("routine_folders", 5, {}),
+                "/v1/routine_folders": ("routine_folders", 10, {}),
                 "/v1/body_measurements": ("body_measurements", 10, {}),
                 "/v1/workouts/events": ("events", 10, epoch)}
     for path, (key, expected, extra) in defaults.items():
@@ -166,6 +175,8 @@ def main() -> int:
         page_count = body.get("page_count") if isinstance(body, dict) else 0
         if page_count and page_count > 1:
             check(f"{path} default pageSize is {expected}", expected, got)
+        else:
+            print(f"  [SKIP] {path} default pageSize: not enough records")
 
     unfiltered = call_dict("/v1/workouts/events")
     backfill = call_dict("/v1/workouts/events", pageSize=10, **epoch)
@@ -227,16 +238,24 @@ def main() -> int:
         if rexes:
             rex = rexes[0]
             check("routine exercises use superset_id", True, "superset_id" in rex)
-            check("rest_seconds is an integer", "int", type(rex.get("rest_seconds")).__name__)
+            check("rest_seconds is present and integer or null", True,
+                  "rest_seconds" in rex and
+                  (rex["rest_seconds"] is None or type(rex["rest_seconds"]) is int))
             # A routine exercise can hold zero sets, so the shape check skips one that does.
             if rex.get("sets"):
                 check("routine sets carry rep_range", True, "rep_range" in rex["sets"][0])
+                check("routine sets omit rpe", False, "rpe" in rex["sets"][0])
 
     templates = call_dict("/v1/exercise_templates", pageSize=1)
     if templates.get("exercise_templates"):
         template = templates["exercise_templates"][0]
         check("templates use equipment", True, "equipment" in template)
         check("templates do not use equipment_category", False, "equipment_category" in template)
+        single = call_dict("/v1/exercise_templates/" + urllib.parse.quote(template["id"], safe=""))
+        for label, entry in (("listed", template), ("single", single)):
+            check(f"{label} template carries thumbnail_url as string or null", True,
+                  "thumbnail_url" in entry and
+                  (entry["thumbnail_url"] is None or isinstance(entry["thumbnail_url"], str)))
 
     if exercise:
         template_id = exercise["exercise_template_id"]

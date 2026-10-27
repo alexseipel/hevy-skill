@@ -6,11 +6,10 @@ An agent skill for the [Hevy](https://hevy.com) training API: every endpoint of
 `api.hevyapp.com/v1`, the object shapes behind them, and a dependency-free
 client to call them with.
 
-All 22 operations are covered, and a CI check proves it. Every documented
-behaviour was verified against a live account, which turned up **eighteen
-places where Hevy's published OpenAPI spec is wrong**
-([observed.md](skills/hevy-api/reference/observed.md)). This skill documents
-what the API does, not what the spec says.
+All 22 operations are covered, and a CI check proves it. The upstream spec was
+refreshed on 2026-10-27, retiring twelve corrections Hevy has incorporated.
+[observed.md](skills/hevy-api/reference/observed.md) records the remaining
+differences, live verification dates and unresolved write response changes.
 
 ## Install
 
@@ -55,8 +54,11 @@ Then ask the agent in your own words: "sync my last month of Hevy workouts
 into a CSV", "chart my bench press over the past year".
 
 The client also runs on its own, with 26 commands: one per endpoint, plus
-`summary`, `sync`, `sql` and `cache`. Standard library only, on Python 3.9 or
-newer.
+`summary`, `sync`, `sql` and `cache`. Standard library only, on Python 3.11 or
+newer. CI tests Python 3.11 and 3.15 with the latest available patch releases.
+
+Python 3.9 and 3.10 are outside the supported range because they have reached
+[end of life](https://devguide.python.org/versions/).
 
 ```bash
 python3 skills/hevy-api/scripts/hevy.py templates --search "bench press"
@@ -80,7 +82,7 @@ so the error says the write may have landed. `--help` lists every command.
 
 The upstream spec declares no server and no security scheme, so a generated
 client knows neither where to send a request nor how to authenticate. One
-command re-pins Hevy's document from the Swagger UI bundle and re-applies all 31
+command re-pins Hevy's document from the Swagger UI bundle and re-applies all 19
 corrections from [spec-patches.json](skills/hevy-api/spec-patches.json):
 
 ```bash
@@ -163,8 +165,9 @@ omits them, so installing the API skill does not drag them along.
 - **Other people's data.** A key reaches one account. No OAuth, no user
   scoping.
 - **Anything outside `/v1`.** No webhooks, no streaming, no bulk import.
-- **Plan and unit settings.** The API exposes an account id, a name and a
-  profile URL, and nothing else.
+- **Per-exercise unit overrides.** User info reports account weight and
+  distance preferences, plus `is_pro`. Training values remain metric, and
+  `summary` uses kilograms unless you pass `--unit lb`.
 
 Hevy's documentation says the API may change shape or be withdrawn, so pin the
 behaviour you depend on with tests.
@@ -196,6 +199,10 @@ measurements are skipped when there are none. Its write probes carry an
 invalid key, so write behaviour was verified once by hand
 ([observed.md](skills/hevy-api/reference/observed.md)). A failure names the
 claim it broke.
+
+The 2026-10-27 refresh checked reads without creating or changing training
+data. Routine writes now document an object where earlier writes returned an
+array, so the corrected spec accepts both until an authorised write resolves it.
 
 Conventions for editing the skills: [AGENTS.md](AGENTS.md). Getting a change
 merged: [CONTRIBUTING.md](CONTRIBUTING.md).

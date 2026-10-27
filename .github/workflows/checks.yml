@@ -21,10 +21,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.12"
+          python-version: "3.15"
+          check-latest: true
       - name: Validate skill layout, frontmatter, links and secrets
         run: python3 scripts/validate_skill.py
       - name: Check every API operation is covered
@@ -35,18 +36,18 @@ jobs:
         run: python3 -m unittest discover -s tests
 
   compat:
-    # The client documents Python 3.9 or newer, so the floor and the current
-    # release both execute the claim rather than assert it.
+    # Test the supported floor and the current release.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       matrix:
-        python: ["3.9", "3.14"]
+        python: ["3.11", "3.15"]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python }}
+          check-latest: true
       - name: Run the offline client tests
         run: python3 -m unittest discover -s tests
 
@@ -57,17 +58,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.12"
+          python-version: "3.15"
+          check-latest: true
       - name: Re-pin upstream and re-apply every correction
         run: python3 scripts/build_corrected_spec.py --fetch
+      - name: Check coverage against the fetched API
+        run: python3 scripts/check_coverage.py
       - name: Report what moved
+        if: always()
         run: |
-          if ! git diff --quiet; then
+          if ! git diff --quiet -- skills/hevy-api/openapi.json skills/hevy-api/openapi.corrected.json; then
             echo "::warning::Hevy's OpenAPI document changed. Review the diff."
-            git diff --stat
+            git diff -- skills/hevy-api/openapi.json skills/hevy-api/openapi.corrected.json
             exit 1
           fi
-          echo "Upstream unchanged."
+          echo "No specification diff in this checkout."

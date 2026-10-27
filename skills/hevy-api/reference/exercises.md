@@ -11,7 +11,7 @@ The catalogue: Hevy's built-in exercises plus the account's custom ones.
 | ---------- | ------ | ------- | -------------------------------- |
 | `api-key`  | header | —       | required                         |
 | `page`     | query  | 1       | 1 or greater                     |
-| `pageSize` | query  | 100     | maximum 100, the highest cap here. The spec's default of 5 is wrong ([observed.md](observed.md)) |
+| `pageSize` | query  | 100     | maximum 100, the highest cap here |
 
 ```bash
 curl -s "https://api.hevyapp.com/v1/exercise_templates?pageSize=100" \
@@ -22,12 +22,12 @@ curl -s "https://api.hevyapp.com/v1/exercise_templates?pageSize=100" \
 { "page": 1, "page_count": 5, "exercise_templates": [
   { "id": "3BC06AD3", "title": "21s Bicep Curl", "type": "weight_reps",
     "primary_muscle_group": "biceps", "secondary_muscle_groups": [],
-    "equipment": "barbell", "is_custom": false } ] }
+    "equipment": "barbell", "is_custom": false, "thumbnail_url": null } ] }
 ```
 
-**The field is `equipment` when reading**, not the `equipment_category` the
-spec names ([observed.md](observed.md)). Ids are short hex strings such as
-`3BC06AD3`, not the UUIDs the spec's examples show.
+**The field is `equipment` when reading** and `equipment_category` when
+creating a template. `thumbnail_url` is an image URL or `null`. Built-in ids
+are short hex strings such as `3BC06AD3`, not the UUIDs the spec's examples show.
 
 **There is no search parameter.** Page the whole catalogue once at
 `pageSize=100`, build a title-to-id map, and cache it. Every workout and
