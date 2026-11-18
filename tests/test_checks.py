@@ -62,16 +62,20 @@ class CorrectedSpecTest(unittest.TestCase):
                 if param["name"] == "pageSize":
                     self.assertEqual(param["schema"]["default"], param["schema"]["maximum"])
 
-    def test_routine_write_schema_keeps_documented_and_observed_shapes(self):
+    def test_routine_writes_keep_the_object_upstream_documents(self):
+        """Both answered with an object on 2026-11-18, so no patch touches them."""
         document = self.build()
         for route, method, status in (("/v1/routines", "post", "201"),
                                       ("/v1/routines/{routineId}", "put", "200")):
             schema = document["paths"][route][method]["responses"][status]["content"]["application/json"]["schema"]
-            variants = schema["properties"]["routine"]["oneOf"]
-            self.assertEqual(variants[0], {"$ref": "#/components/schemas/Routine"})
-            self.assertEqual(variants[1]["type"], "array")
-            self.assertEqual(variants[1]["items"], variants[0])
-            self.assertEqual((variants[1]["minItems"], variants[1]["maxItems"]), (1, 1))
+            self.assertEqual(schema["properties"]["routine"],
+                             {"$ref": "#/components/schemas/Routine"})
+
+    def test_a_routine_update_no_longer_claims_a_null_rep_range(self):
+        document = self.build()
+        schemas = document["components"]["schemas"]
+        self.assertFalse(schemas["PutRoutinesRequestSet"]["properties"]["rep_range"]["nullable"])
+        self.assertTrue(schemas["PostRoutinesRequestSet"]["properties"]["rep_range"]["nullable"])
 
     def test_a_new_upstream_fix_still_fails_instead_of_silently_skipping(self):
         upstream = json.loads(builder.UPSTREAM.read_text())

@@ -61,7 +61,7 @@ curl -s "https://api.hevyapp.com/v1/body_measurements/2024-08-14" \
 ```
 
 Returns a bare `BodyMeasurement`. `404` returns `{"error": "…"}` when no entry
-exists for that date, one of the two `404`s that are JSON
+exists for that date, a `404` that is JSON
 ([observed.md](observed.md#17-a-404-body-is-plain-text-on-three-routes)).
 
 ## PUT /v1/body_measurements/{date}
@@ -70,12 +70,13 @@ Returns `200` with an empty body. The request body is a `BodyMeasurement`
 without `date`, because the path carries it.
 
 **Every omitted field is set to `null`.** This is a full overwrite, not a
-patch, and it is the sharpest edge in the API. Verified on 2026-08-23: an entry
+patch, and it is the sharpest edge in the API. Verified on 2026-11-18: an entry
 holding `weight_kg`, `fat_percent` and `chest_cm`, updated with
 `{"weight_kg": 72}` alone, came back holding the weight and nothing else.
 
 Read, merge, then write. `PutBodyMeasurement` has no `date`, no `id` and no
-`created_at`, so all three come out before the write:
+`created_at`. This route ignored all three on 2026-11-18, along with
+`picture_url`, so the `del` below matches the schema, not a server check:
 
 ```bash
 DATE=2024-08-14
@@ -107,10 +108,11 @@ first. `400`, `413` and `415` mean what they mean on the workout route, and the
 two routes share one limit of 100 uploads per 24 hours.
 
 The entry then carries `picture_url`, which the spec marks nullable and
-read-only. None of the entries read on 2026-11-18 carried the field.
+read-only. An entry without a picture omits the field.
 
-**This section is the spec's word.** The route entered the spec on 2026-11-18
-and no upload was made. Observed that day: it allows `PUT` only and checks the
-key before the body.
+Verified with two uploads on 2026-11-18
+([observed.md](observed.md#image-uploads)). A 1,200 by 1,600 PNG was stored as
+a 900 by 1,200 JPEG, and the second upload replaced it under a new URL.
 
-<!-- UNVERIFIED: whether PUT /v1/body_measurements/{date}, which nulls omitted fields, keeps the picture. -->
+**The picture survives `PUT /v1/body_measurements/{date}`**, which nulls every
+other omitted field. Nothing removes it: the route allows `PUT` only.

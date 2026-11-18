@@ -130,15 +130,15 @@ found` under `text/html`**, not JSON
 
 Takes the same body as `POST /v1/workouts` and returns `200`.
 
-**It replaces the workout.** Verified on 2026-08-23: a workout with two
-exercises, updated with a body carrying one, came back with one. Everything you
-leave out is dropped, so read the workout, edit the object, and send the whole
-thing back.
+**It replaces the workout.** Verified on 2026-11-18: a workout with two
+exercises, updated with a body carrying one, came back with one. Every exercise
+you leave out is dropped, so read the workout, edit the object, and send the
+whole thing back. Its images are kept.
 
 **Strip the read-only keys first.** The write schema rejects unrecognized
-keys, and a read carries three: `index` on every set, `index` and `title` on
-every exercise. Sending them back is a `400` with "Unrecognized key(s)"
-([observed.md](observed.md#write-behaviour)).
+keys, and a read carries four: `index` on every set, `index` and `title` on
+every exercise, `media` on the workout. Sending them back is a `400` with
+"Unrecognized key(s)" ([observed.md](observed.md#write-behaviour)).
 
 The response is wrapped the same way as the create response, so read the result
 from `body.workout[0]`.
@@ -148,8 +148,9 @@ from `body.workout[0]`.
 ## POST /v1/workouts/{workoutId}/images
 
 Adds one image after the workout's existing media and returns `201` with the
-updated `Workout`. **The body is the raw image, not JSON and not multipart**,
-under a `Content-Type` of `image/jpeg`, `image/png` or `image/webp`.
+updated `Workout`, bare, unlike the create and the update. **The body is the
+raw image, not JSON and not multipart**, under a `Content-Type` of
+`image/jpeg`, `image/png` or `image/webp`.
 
 ```bash
 curl -s -X POST "https://api.hevyapp.com/v1/workouts/$WORKOUT_ID/images" \
@@ -164,18 +165,20 @@ curl -s -X POST "https://api.hevyapp.com/v1/workouts/$WORKOUT_ID/images" \
 | stored as         | JPEG, resized to fit 800 by 800 pixels                   |
 | uploads           | 100 per 24 hours for each account, across both image routes |
 
-| Status | Meaning                                              |
-| ------ | ---------------------------------------------------- |
-| 400    | not a valid image, or the workout already holds 3    |
-| 404    | no such workout                                      |
-| 413    | larger than 10 MB                                    |
-| 415    | a `Content-Type` outside the three                   |
+| Status | Meaning                                              | Body        |
+| ------ | ---------------------------------------------------- | ----------- |
+| 400    | not a valid image, or the workout already holds 3    | `{"error"}` |
+| 404    | no such workout                                      | `{"error"}`, where the `GET` sends plain text |
+| 413    | larger than 10 MB                                    | an HTML page |
+| 415    | a `Content-Type` outside the three, or an empty body | `{"error"}` |
 
-The image comes back in the workout's `media` array
-([objects.md](objects.md#workoutmedia)).
+The image comes back in the workout's `media` array as
+`{"type": "image", "url": "…"}` ([objects.md](objects.md#workoutmedia)).
 
-**Everything above is the spec's word.** The route entered the spec on
-2026-11-18 and no upload was made. Observed that day: it allows `POST` only, so
-nothing removes an image, and it checks the key before the body.
+Verified with three uploads on 2026-11-18
+([observed.md](observed.md#image-uploads)). A 1,200 by 1,600 PNG was stored as
+a 600 by 800 JPEG, and a 64 by 64 WebP was not enlarged.
 
-<!-- UNVERIFIED: whether PUT /v1/workouts/{workoutId}, which replaces the workout, keeps its media. -->
+**Nothing removes an image.** The route allows `POST` only, and a later
+`PUT /v1/workouts/{workoutId}` keeps the media. The stored URL answers without
+a key, on a private workout too.
