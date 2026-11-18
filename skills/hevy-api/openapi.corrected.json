@@ -2,1341 +2,36 @@
   "openapi": "3.0.0",
   "info": {
     "title": "Hevy Public API Docs",
-    "description": "\n      Welcome to Hevy's public API! We're just starting to roll this out and depending on your\n      feedback, we'll be adding more features and endpoints. Also, we make no guarantees that \n      we won't completely change the structure or abandon the project entirely so use it at\n      your own risk. Currently, this API is only available to Hevy Pro users. You can get your \n      key on our web app at https://hevy.com/settings?developer. If you have any questions,\n      please reach out to pavel@hevyapp.com \ud83e\udd1d \n\nNote: if for whatever reason you update data from Hevy hourly or daily, please don't send your requests exactly at xx:00. Put some random minute instead.\n\n      CORRECTED COPY. 19 corrections based on live observations dated 2026-08-24, plus 404 responses on 5 list routes. The upstream document is openapi.json, and the corrections are listed in spec-patches.json and reference/observed.md. Upstream reviewed on 2026-10-27; later write response changes remain unverified.\n      ",
     "version": "0.0.1",
-    "x-corrections-verified-at": "2026-08-24",
-    "x-upstream-checked-at": "2026-10-27",
+    "description": "CORRECTED COPY. 15 corrections from live observations: read behaviour last checked on 2026-11-18, write responses last observed on 2026-08-23. The upstream document is openapi.json, reviewed on 2026-11-18, and the corrections are listed in spec-patches.json and reference/observed.md.",
+    "x-reads-verified-at": "2026-11-18",
+    "x-writes-verified-at": "2026-08-23",
+    "x-upstream-checked-at": "2026-11-18",
     "x-corrections-source": "spec-patches.json",
     "x-upstream": {
-      "source": "https://api.hevyapp.com/docs",
+      "source": "https://developers.hevy.com/openapi.json",
       "notice": "Derived from Hevy's own OpenAPI document. Copyright in the original, including its descriptions and examples, belongs to Hevy. The corrections are MIT licensed; the underlying document is redistributed for interoperability. See NOTICE."
     }
   },
-  "paths": {
-    "/v1/workouts": {
-      "get": {
-        "summary": "Get a paginated list of workouts",
-        "tags": [
-          "Workouts"
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "integer",
-              "default": 1
-            },
-            "description": "Page number (Must be 1 or greater)"
-          },
-          {
-            "in": "query",
-            "name": "pageSize",
-            "schema": {
-              "type": "integer",
-              "default": 10,
-              "maximum": 10
-            },
-            "description": "Number of items on the requested page (Max 10)"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "A paginated list of workouts",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "page": {
-                      "type": "integer",
-                      "example": 1,
-                      "description": "Current page number"
-                    },
-                    "page_count": {
-                      "type": "integer",
-                      "example": 5,
-                      "description": "Total number of pages"
-                    },
-                    "workouts": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Workout"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid page size"
-          },
-          "404": {
-            "description": "Page number past the last page",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "example": {
-                    "error": "Page not found"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "summary": "Create a new workout",
-        "tags": [
-          "Workouts"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PostWorkoutsRequestBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "The workout was successfully created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "workout": {
-                      "type": "array",
-                      "description": "The created workout, returned as a single-element array.",
-                      "items": {
-                        "$ref": "#/components/schemas/Workout"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "description": "Error message"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/workouts/count": {
-      "get": {
-        "summary": "Get the total number of workouts on the account",
-        "tags": [
-          "Workouts"
-        ],
-        "responses": {
-          "200": {
-            "description": "The total count of workouts",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "workout_count": {
-                      "type": "integer",
-                      "default": 42,
-                      "description": "The total number of workouts"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/workouts/events": {
-      "get": {
-        "summary": "Retrieve a paged list of workout events (updates or deletes) since a given date. Events are ordered from newest to oldest. The intention is to allow clients to keep their local cache of workouts up to date without having to fetch the entire list of workouts.",
-        "tags": [
-          "Workouts"
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "integer",
-              "default": 1
-            },
-            "description": "Page number (Must be 1 or greater)"
-          },
-          {
-            "in": "query",
-            "name": "pageSize",
-            "schema": {
-              "type": "integer",
-              "default": 10,
-              "maximum": 10
-            },
-            "description": "Number of items on the requested page (Max 10)"
-          },
-          {
-            "in": "query",
-            "name": "since",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "description": "Returns a paginated array of workout events, indicating updates or deletions.",
-        "responses": {
-          "200": {
-            "description": "A paginated list of workout events",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaginatedWorkoutEvents"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error"
-          },
-          "404": {
-            "description": "Page number past the last page",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "example": {
-                    "error": "Page not found"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/workouts/{workoutId}": {
-      "get": {
-        "tags": [
-          "Workouts"
-        ],
-        "summary": "Get a single workout\u2019s complete details by the workoutId",
-        "parameters": [
-          {
-            "name": "workoutId",
-            "in": "path",
-            "description": "The id of the workout",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Workout"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Workout not found",
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string",
-                  "example": "Workout not found"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "summary": "Update an existing workout",
-        "tags": [
-          "Workouts"
-        ],
-        "parameters": [
-          {
-            "in": "path",
-            "name": "workoutId",
-            "description": "The id of the workout",
-            "required": true
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PostWorkoutsRequestBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The workout was successfully updated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "workout"
-                  ],
-                  "properties": {
-                    "workout": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Workout"
-                      },
-                      "minItems": 1,
-                      "maxItems": 1,
-                      "description": "The updated workout, as the array's only element."
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "description": "Error message"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/user/info": {
-      "get": {
-        "summary": "Get user info",
-        "tags": [
-          "Users"
-        ],
-        "responses": {
-          "200": {
-            "description": "The authenticated user's info",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserInfoResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User not found"
-          }
-        }
-      }
-    },
-    "/v1/routines": {
-      "get": {
-        "summary": "Get a paginated list of routines",
-        "tags": [
-          "Routines"
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "integer",
-              "default": 1
-            },
-            "description": "Page number (Must be 1 or greater)"
-          },
-          {
-            "in": "query",
-            "name": "pageSize",
-            "schema": {
-              "type": "integer",
-              "default": 10,
-              "maximum": 10
-            },
-            "description": "Number of items on the requested page (Max 10)"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "A paginated list of routines",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "page": {
-                      "type": "integer",
-                      "example": 1,
-                      "description": "Current page number"
-                    },
-                    "page_count": {
-                      "type": "integer",
-                      "example": 5,
-                      "description": "Total number of pages"
-                    },
-                    "routines": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Routine"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid page size"
-          },
-          "404": {
-            "description": "Page number past the last page",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "example": {
-                    "error": "Page not found"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "summary": "Create a new routine",
-        "tags": [
-          "Routines"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PostRoutinesRequestBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "The routine was successfully created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "routine"
-                  ],
-                  "properties": {
-                    "routine": {
-                      "oneOf": [
-                        {
-                          "$ref": "#/components/schemas/Routine"
-                        },
-                        {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/components/schemas/Routine"
-                          },
-                          "minItems": 1,
-                          "maxItems": 1,
-                          "description": "The created routine, as the array's only element."
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "description": "Error message"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Routine limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "description": "Error message"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/routines/{routineId}": {
-      "get": {
-        "summary": "Get a routine by its Id",
-        "tags": [
-          "Routines"
-        ],
-        "parameters": [
-          {
-            "in": "path",
-            "name": "routineId",
-            "description": "The id of the routine",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The routine with the provided id",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "routine": {
-                      "$ref": "#/components/schemas/Routine"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "description": "Error message"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No routine with this id on this account",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "summary": "Update an existing routine",
-        "tags": [
-          "Routines"
-        ],
-        "parameters": [
-          {
-            "in": "path",
-            "name": "routineId",
-            "description": "The id of the routine",
-            "required": true
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PutRoutinesRequestBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The routine was successfully updated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "routine"
-                  ],
-                  "properties": {
-                    "routine": {
-                      "oneOf": [
-                        {
-                          "$ref": "#/components/schemas/Routine"
-                        },
-                        {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/components/schemas/Routine"
-                          },
-                          "minItems": 1,
-                          "maxItems": 1,
-                          "description": "The updated routine, as the array's only element."
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "description": "Error message"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Routine doesn't exist or doesn't belong to the user",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "description": "Error message"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/exercise_templates": {
-      "get": {
-        "summary": "Get a paginated list of exercise templates available on the account.",
-        "tags": [
-          "ExerciseTemplates"
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "integer",
-              "default": 1
-            },
-            "description": "Page number (Must be 1 or greater)"
-          },
-          {
-            "in": "query",
-            "name": "pageSize",
-            "schema": {
-              "type": "integer",
-              "default": 100,
-              "maximum": 100
-            },
-            "description": "Number of items on the requested page (Max 100)"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "A paginated list of exercise templates",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "page": {
-                      "type": "integer",
-                      "default": 1,
-                      "description": "Current page number"
-                    },
-                    "page_count": {
-                      "type": "integer",
-                      "default": 5,
-                      "description": "Total number of pages"
-                    },
-                    "exercise_templates": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ExerciseTemplate"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid page size"
-          },
-          "404": {
-            "description": "Page number past the last page",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "example": {
-                    "error": "Page not found"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "summary": "Create a new custom exercise template.",
-        "tags": [
-          "ExerciseTemplates"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateCustomExerciseRequestBody"
-              }
-            }
-          },
-          "description": "The exercise template to create."
-        },
-        "responses": {
-          "200": {
-            "description": "The exercise template was successfully created",
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "The new template's id as bare text: 36 bytes, no JSON, no quotes.",
-                  "example": "11111111-2222-3333-4444-555555555555"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "description": "A validation report, not a message",
-                      "properties": {
-                        "issues": {
-                          "type": "array",
-                          "items": {
-                            "type": "object"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Exceeds custom exercise limit",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "description": "Error message",
-                      "example": "exceeds-custom-exercise-limit"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/exercise_templates/{exerciseTemplateId}": {
-      "get": {
-        "tags": [
-          "ExerciseTemplates"
-        ],
-        "summary": "Get a single exercise template by id.",
-        "parameters": [
-          {
-            "name": "exerciseTemplateId",
-            "in": "path",
-            "description": "The id of the exercise template",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExerciseTemplate"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Exercise template not found",
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string",
-                  "example": "Exercise template not found"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/routine_folders": {
-      "get": {
-        "summary": "Get a paginated list of routine folders available on the account.",
-        "tags": [
-          "RoutineFolders"
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "integer",
-              "default": 1
-            },
-            "description": "Page number (Must be 1 or greater)"
-          },
-          {
-            "in": "query",
-            "name": "pageSize",
-            "schema": {
-              "type": "integer",
-              "default": 10,
-              "maximum": 10
-            },
-            "description": "Number of items on the requested page (Max 10)"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "A paginated list of routine folders",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "page": {
-                      "type": "integer",
-                      "default": 1,
-                      "description": "Current page number"
-                    },
-                    "page_count": {
-                      "type": "integer",
-                      "default": 5,
-                      "description": "Total number of pages"
-                    },
-                    "routine_folders": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/RoutineFolder"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid page size"
-          },
-          "404": {
-            "description": "Page number past the last page",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "example": {
-                    "error": "Page not found"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "summary": "Create a new routine folder. The folder will be created at index 0, and all other folders will have their indexes incremented.",
-        "tags": [
-          "RoutineFolders"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PostRoutineFolderRequestBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "The routine folder was successfully created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "routine_folder"
-                  ],
-                  "properties": {
-                    "routine_folder": {
-                      "$ref": "#/components/schemas/RoutineFolder"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "description": "Error message"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/routine_folders/{folderId}": {
-      "get": {
-        "tags": [
-          "RoutineFolders"
-        ],
-        "summary": "Get a single routine folder by id.",
-        "parameters": [
-          {
-            "name": "folderId",
-            "in": "path",
-            "description": "The id of the routine folder",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RoutineFolder"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Routine folder not found",
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string",
-                  "example": "Routine folder not found"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/exercise_history/{exerciseTemplateId}": {
-      "get": {
-        "summary": "Get exercise history for a specific exercise template",
-        "tags": [
-          "ExerciseHistory"
-        ],
-        "parameters": [
-          {
-            "in": "path",
-            "name": "exerciseTemplateId",
-            "description": "The id of the exercise template",
-            "required": true
-          },
-          {
-            "in": "query",
-            "name": "start_date",
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            },
-            "description": "Optional start date for filtering exercise history (ISO 8601 format)",
-            "example": "2024-01-01T00:00:00Z",
-            "required": false
-          },
-          {
-            "in": "query",
-            "name": "end_date",
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            },
-            "description": "Optional end date for filtering exercise history (ISO 8601 format)",
-            "example": "2024-12-31T23:59:59Z",
-            "required": false
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "A list of exercise history entries",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "exercise_history": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ExerciseHistoryEntry"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request parameters or date format"
-          }
-        }
-      }
-    },
-    "/v1/body_measurements": {
-      "get": {
-        "summary": "Get a paginated list of body measurements for the authenticated user",
-        "tags": [
-          "Measurements"
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "integer",
-              "default": 1
-            },
-            "description": "Page number (Must be 1 or greater)"
-          },
-          {
-            "in": "query",
-            "name": "pageSize",
-            "schema": {
-              "type": "integer",
-              "default": 10,
-              "maximum": 10
-            },
-            "description": "Number of items per page (Max 10)"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "A paginated list of body measurements",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "page": {
-                      "type": "integer",
-                      "example": 1
-                    },
-                    "page_count": {
-                      "type": "integer",
-                      "example": 5
-                    },
-                    "body_measurements": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/BodyMeasurement"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid page or pageSize"
-          },
-          "404": {
-            "description": "Page not found"
-          }
-        }
-      },
-      "post": {
-        "summary": "Create a body measurement entry for a given date. Returns 409 if an entry already exists for that date.",
-        "tags": [
-          "Measurements"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BodyMeasurement"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "The measurement was successfully created. The response body is empty."
-          },
-          "400": {
-            "description": "Invalid request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "A measurement for this date already exists",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/body_measurements/{date}": {
-      "get": {
-        "summary": "Get a single body measurement by date",
-        "tags": [
-          "Measurements"
-        ],
-        "parameters": [
-          {
-            "in": "path",
-            "name": "date",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "date",
-              "example": "2024-01-15"
-            },
-            "description": "The date of the body measurement (YYYY-MM-DD)"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The body measurement for the given date",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BodyMeasurement"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Body measurement not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "summary": "Update an existing body measurement entry for a given date. All fields are overwritten; omitted fields are set to null.",
-        "tags": [
-          "Measurements"
-        ],
-        "parameters": [
-          {
-            "in": "path",
-            "name": "date",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "date",
-              "example": "2024-01-15"
-            },
-            "description": "The date of the measurement to update (YYYY-MM-DD)"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PutBodyMeasurement"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The measurement was successfully updated"
-          },
-          "400": {
-            "description": "Invalid request body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No measurement found for the given date",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+  "servers": [
+    {
+      "url": "https://api.hevyapp.com"
     }
-  },
+  ],
   "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "api-key",
+        "description": "A personal key, issued at https://developers.hevy.com/api-key to Hevy Pro accounts. A missing or wrong key returns 401 with the plain-text body InvalidApiKey served as text/html, not JSON."
+      },
+      "oauth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "An OAuth access token from https://hevy.com/api/token, valid for one hour. A wrong or expired token returns 401 with {\"message\": \"Invalid or expired token\"} as application/json."
+      }
+    },
     "schemas": {
       "PostWorkoutsRequestSet": {
         "type": "object",
@@ -1851,6 +546,13 @@
             "type": "number",
             "nullable": true,
             "example": 37.5
+          },
+          "picture_url": {
+            "type": "string",
+            "nullable": true,
+            "readOnly": true,
+            "description": "URL of the progress picture. Upload one with PUT /v1/body_measurements/{date}/image.",
+            "example": "https://d2l9nsnmtah87f.cloudfront.net/profile-images/username-0b9f4d6e-6a0f-4c8e-9f5d-2a1b3c4d5e6f.jpg"
           },
           "id": {
             "type": "integer",
@@ -2481,6 +1183,33 @@
           }
         }
       },
+      "WorkoutMedia": {
+        "type": "object",
+        "required": [
+          "type",
+          "url"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video"
+            ],
+            "example": "image"
+          },
+          "url": {
+            "type": "string",
+            "description": "URL of the image or video.",
+            "example": "https://d2l9nsnmtah87f.cloudfront.net/profile-images/username-0b9f4d6e-6a0f-4c8e-9f5d-2a1b3c4d5e6f.jpg"
+          },
+          "thumbnail_url": {
+            "type": "string",
+            "description": "URL of the video thumbnail. Only present for videos.",
+            "example": "https://d2l9nsnmtah87f.cloudfront.net/workout-videos/username-0b9f4d6e-6a0f-4c8e-9f5d-2a1b3c4d5e6f.jpg"
+          }
+        }
+      },
       "Workout": {
         "type": "object",
         "properties": {
@@ -2525,6 +1254,13 @@
             "type": "string",
             "description": "ISO 8601 timestamp of when the workout was created.",
             "example": "2021-09-14T12:00:00Z"
+          },
+          "media": {
+            "type": "array",
+            "description": "Images and videos attached to the workout, in display order.",
+            "items": {
+              "$ref": "#/components/schemas/WorkoutMedia"
+            }
           },
           "exercises": {
             "type": "array",
@@ -2662,7 +1398,8 @@
         "type": "object",
         "required": [
           "page",
-          "page_count"
+          "page_count",
+          "events"
         ],
         "properties": {
           "page": {
@@ -2689,29 +1426,1416 @@
             },
             "description": "An array of workout events (either updated or deleted)"
           }
-        },
-        "description": "When the feed has nothing to report, events is absent and an empty workouts array takes its place. Read events with a default."
-      }
-    },
-    "securitySchemes": {
-      "ApiKey": {
-        "type": "apiKey",
-        "in": "header",
-        "name": "api-key",
-        "description": "Issued at https://hevy.com/settings?developer. Hevy Pro only. A missing or wrong key returns 401 with the plain-text body InvalidApiKey served as text/html, not JSON. Observed 2026-08-22."
+        }
       }
     }
   },
-  "tags": [],
-  "servers": [
-    {
-      "url": "https://api.hevyapp.com",
-      "description": "Production"
-    }
-  ],
   "security": [
     {
-      "ApiKey": []
+      "apiKey": []
+    },
+    {
+      "oauth": []
     }
-  ]
+  ],
+  "paths": {
+    "/v1/workouts": {
+      "get": {
+        "summary": "Get a paginated list of workouts",
+        "tags": [
+          "Workouts"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "Page number (Must be 1 or greater)"
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "maximum": 10
+            },
+            "description": "Number of items on the requested page (Max 10)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of workouts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "page": {
+                      "type": "integer",
+                      "example": 1,
+                      "description": "Current page number"
+                    },
+                    "page_count": {
+                      "type": "integer",
+                      "example": 5,
+                      "description": "Total number of pages"
+                    },
+                    "workouts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Workout"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page size"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new workout",
+        "tags": [
+          "Workouts"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostWorkoutsRequestBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The workout was successfully created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "workout": {
+                      "type": "array",
+                      "description": "The created workout, returned as a single-element array.",
+                      "items": {
+                        "$ref": "#/components/schemas/Workout"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error message"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workouts/count": {
+      "get": {
+        "summary": "Get the total number of workouts on the account",
+        "tags": [
+          "Workouts"
+        ],
+        "responses": {
+          "200": {
+            "description": "The total count of workouts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "workout_count": {
+                      "type": "integer",
+                      "default": 42,
+                      "description": "The total number of workouts"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workouts/events": {
+      "get": {
+        "summary": "Retrieve a paged list of workout events (updates or deletes) since a given date. Events are ordered from newest to oldest. The intention is to allow clients to keep their local cache of workouts up to date without having to fetch the entire list of workouts.",
+        "tags": [
+          "Workouts"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "Page number (Must be 1 or greater)"
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "maximum": 10
+            },
+            "description": "Number of items on the requested page (Max 10)"
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Returns a paginated array of workout events, indicating updates or deletions.",
+        "responses": {
+          "200": {
+            "description": "A paginated list of workout events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedWorkoutEvents"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/v1/workouts/{workoutId}": {
+      "get": {
+        "tags": [
+          "Workouts"
+        ],
+        "summary": "Get a single workout\u2019s complete details by the workoutId",
+        "parameters": [
+          {
+            "name": "workoutId",
+            "in": "path",
+            "description": "The id of the workout",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workout"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workout not found",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string",
+                  "example": "Workout not found"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update an existing workout",
+        "tags": [
+          "Workouts"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workoutId",
+            "description": "The id of the workout",
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostWorkoutsRequestBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The workout was successfully updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "workout"
+                  ],
+                  "properties": {
+                    "workout": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Workout"
+                      },
+                      "minItems": 1,
+                      "maxItems": 1,
+                      "description": "The updated workout, as the array's only element."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error message"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user/info": {
+      "get": {
+        "summary": "Get user info",
+        "tags": [
+          "Users"
+        ],
+        "responses": {
+          "200": {
+            "description": "The authenticated user's info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserInfoResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/v1/workouts/{workoutId}/images": {
+      "post": {
+        "summary": "Upload an image to a workout. The image is added after the workout's existing media. A workout can have up to 3 images and videos in total.",
+        "tags": [
+          "Workouts"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workoutId",
+            "description": "The id of the workout",
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "The image file as the raw request body, up to 10 MB and 50 megapixels. It is converted to JPEG and resized to fit within 800x800 pixels.",
+          "content": {
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The image was added to the workout. Returns the updated workout.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workout"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not a valid image, or the workout already has 3 images and videos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workout not found"
+          },
+          "413": {
+            "description": "The image is larger than 10 MB"
+          },
+          "415": {
+            "description": "The Content-Type is not image/jpeg, image/png or image/webp"
+          }
+        }
+      }
+    },
+    "/v1/routines": {
+      "get": {
+        "summary": "Get a paginated list of routines",
+        "tags": [
+          "Routines"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "Page number (Must be 1 or greater)"
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "maximum": 10
+            },
+            "description": "Number of items on the requested page (Max 10)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of routines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "page": {
+                      "type": "integer",
+                      "example": 1,
+                      "description": "Current page number"
+                    },
+                    "page_count": {
+                      "type": "integer",
+                      "example": 5,
+                      "description": "Total number of pages"
+                    },
+                    "routines": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Routine"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page size"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new routine",
+        "tags": [
+          "Routines"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostRoutinesRequestBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The routine was successfully created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "routine"
+                  ],
+                  "properties": {
+                    "routine": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/Routine"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Routine"
+                          },
+                          "minItems": 1,
+                          "maxItems": 1,
+                          "description": "The created routine, as the array's only element."
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error message"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Routine limit exceeded. Free accounts can have up to 4 routines (routines inside programs don't count). Upgrade to Hevy Pro to create more.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code",
+                      "example": "routine-limit-exceeded"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable explanation",
+                      "example": "Free accounts are limited to 4 routines. Upgrade to Hevy Pro (https://hevy.com/plans) to create more."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/routines/{routineId}": {
+      "get": {
+        "summary": "Get a routine by its Id",
+        "tags": [
+          "Routines"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routineId",
+            "description": "The id of the routine",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The routine with the provided id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "routine": {
+                      "$ref": "#/components/schemas/Routine"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error message"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No routine with this id on this account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update an existing routine",
+        "tags": [
+          "Routines"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routineId",
+            "description": "The id of the routine",
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutRoutinesRequestBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The routine was successfully updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "routine"
+                  ],
+                  "properties": {
+                    "routine": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/Routine"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Routine"
+                          },
+                          "minItems": 1,
+                          "maxItems": 1,
+                          "description": "The updated routine, as the array's only element."
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error message"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Routine doesn't exist or doesn't belong to the user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error message"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exercise_templates": {
+      "get": {
+        "summary": "Get a paginated list of exercise templates available on the account.",
+        "tags": [
+          "ExerciseTemplates"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "Page number (Must be 1 or greater)"
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "maximum": 100
+            },
+            "description": "Number of items on the requested page (Max 100)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of exercise templates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "page": {
+                      "type": "integer",
+                      "default": 1,
+                      "description": "Current page number"
+                    },
+                    "page_count": {
+                      "type": "integer",
+                      "default": 5,
+                      "description": "Total number of pages"
+                    },
+                    "exercise_templates": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ExerciseTemplate"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page size"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new custom exercise template.",
+        "tags": [
+          "ExerciseTemplates"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomExerciseRequestBody"
+              }
+            }
+          },
+          "description": "The exercise template to create."
+        },
+        "responses": {
+          "200": {
+            "description": "The exercise template was successfully created",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "The new template's id as bare text: 36 bytes, no JSON, no quotes.",
+                  "example": "11111111-2222-3333-4444-555555555555"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "description": "A validation report, not a message",
+                      "properties": {
+                        "issues": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Custom exercise limit exceeded. Free accounts can have up to 7 custom exercises. Upgrade to Hevy Pro to create more.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error code",
+                      "example": "exceeds-custom-exercise-limit"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable explanation",
+                      "example": "Free accounts are limited to 7 custom exercises. Upgrade to Hevy Pro (https://hevy.com/plans) to create more."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exercise_templates/{exerciseTemplateId}": {
+      "get": {
+        "tags": [
+          "ExerciseTemplates"
+        ],
+        "summary": "Get a single exercise template by id.",
+        "parameters": [
+          {
+            "name": "exerciseTemplateId",
+            "in": "path",
+            "description": "The id of the exercise template",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExerciseTemplate"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Exercise template not found",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string",
+                  "example": "Exercise template not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/routine_folders": {
+      "get": {
+        "summary": "Get a paginated list of routine folders available on the account.",
+        "tags": [
+          "RoutineFolders"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "Page number (Must be 1 or greater)"
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "maximum": 10
+            },
+            "description": "Number of items on the requested page (Max 10)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of routine folders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "page": {
+                      "type": "integer",
+                      "default": 1,
+                      "description": "Current page number"
+                    },
+                    "page_count": {
+                      "type": "integer",
+                      "default": 5,
+                      "description": "Total number of pages"
+                    },
+                    "routine_folders": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RoutineFolder"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page size"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new routine folder. The folder will be created at index 0, and all other folders will have their indexes incremented.",
+        "tags": [
+          "RoutineFolders"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostRoutineFolderRequestBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The routine folder was successfully created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "routine_folder"
+                  ],
+                  "properties": {
+                    "routine_folder": {
+                      "$ref": "#/components/schemas/RoutineFolder"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "Error message"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/routine_folders/{folderId}": {
+      "get": {
+        "tags": [
+          "RoutineFolders"
+        ],
+        "summary": "Get a single routine folder by id.",
+        "parameters": [
+          {
+            "name": "folderId",
+            "in": "path",
+            "description": "The id of the routine folder",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineFolder"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Routine folder not found",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string",
+                  "example": "Routine folder not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exercise_history/{exerciseTemplateId}": {
+      "get": {
+        "summary": "Get exercise history for a specific exercise template",
+        "tags": [
+          "ExerciseHistory"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "exerciseTemplateId",
+            "description": "The id of the exercise template",
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "start_date",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Optional start date for filtering exercise history (ISO 8601 format)",
+            "example": "2024-01-01T00:00:00Z",
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "end_date",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Optional end date for filtering exercise history (ISO 8601 format)",
+            "example": "2024-12-31T23:59:59Z",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A list of exercise history entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "exercise_history": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ExerciseHistoryEntry"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters or date format"
+          }
+        }
+      }
+    },
+    "/v1/body_measurements": {
+      "get": {
+        "summary": "Get a paginated list of body measurements for the authenticated user",
+        "tags": [
+          "Measurements"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "Page number (Must be 1 or greater)"
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "maximum": 10
+            },
+            "description": "Number of items per page (Max 10)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of body measurements",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "page": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "page_count": {
+                      "type": "integer",
+                      "example": 5
+                    },
+                    "body_measurements": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BodyMeasurement"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page or pageSize"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a body measurement entry for a given date. Returns 409 if an entry already exists for that date.",
+        "tags": [
+          "Measurements"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BodyMeasurement"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The measurement was successfully created. The response body is empty."
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A measurement for this date already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/body_measurements/{date}": {
+      "get": {
+        "summary": "Get a single body measurement by date",
+        "tags": [
+          "Measurements"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2024-01-15"
+            },
+            "description": "The date of the body measurement (YYYY-MM-DD)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The body measurement for the given date",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BodyMeasurement"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Body measurement not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update an existing body measurement entry for a given date. All fields are overwritten; omitted fields are set to null.",
+        "tags": [
+          "Measurements"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2024-01-15"
+            },
+            "description": "The date of the measurement to update (YYYY-MM-DD)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutBodyMeasurement"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The measurement was successfully updated"
+          },
+          "400": {
+            "description": "Invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No measurement found for the given date",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/body_measurements/{date}/image": {
+      "put": {
+        "summary": "Upload the progress picture for an existing body measurement entry. Replaces the entry's current picture, if any.",
+        "tags": [
+          "Measurements"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2024-01-15"
+            },
+            "description": "The date of the body measurement (YYYY-MM-DD)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "The image file as the raw request body, up to 10 MB and 50 megapixels. It is converted to JPEG and resized to fit within 900x1200 pixels.",
+          "content": {
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The picture was saved. Returns the updated body measurement.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BodyMeasurement"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid date, or the body is not a valid image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No body measurement exists for the given date"
+          },
+          "413": {
+            "description": "The image is larger than 10 MB"
+          },
+          "415": {
+            "description": "The Content-Type is not image/jpeg, image/png or image/webp"
+          }
+        }
+      }
+    }
+  },
+  "tags": []
 }

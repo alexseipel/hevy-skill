@@ -57,6 +57,10 @@ PAGE_SIZE_CAP = {
 
 RETRY_STATUSES = {429, 500, 502, 503, 504}
 
+# The Content-Types both image routes accept, keyed by file extension.
+IMAGE_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+               ".png": "image/png", ".webp": "image/webp"}
+
 # Cache and cost notices go to stderr so stdout stays pipeable. HEVY_QUIET=1 silences.
 CALLS_BEFORE_HINT = 10
 _api_calls = 0
@@ -83,22 +87,30 @@ class HevyError(RuntimeError):
 def api_key() -> str:
     key = os.environ.get("HEVY_API_KEY", "").strip()
     if not key:
-        sys.exit("HEVY_API_KEY is not set. Get a key at https://hevy.com/settings?developer")
+        sys.exit("HEVY_API_KEY is not set. Get a key at https://developers.hevy.com/api-key")
     return key
 
 
 WRITE_INTERRUPTED = ("The failed request was a write and may still have been "
                      "applied. Read the resource back before retrying: the API "
-                     "has no delete route, so a duplicate create is permanent.")
+                     "cannot delete training data, so a duplicate create is permanent.")
+
+# Fixed windows and no Retry-After header (https://developers.hevy.com/rate-limits).
+RATE_LIMITED = ("Hevy counts requests in fixed windows of five minutes, or 24 "
+                "hours for workout creates, and does not say when one ends. "
+                "Wait for the window to pass before retrying.")
 
 
 def request(method: str, path: str, params: dict | None = None,
-            body: dict | None = None, retries: int = 3) -> object:
+            body: dict | None = None, retries: int = 3,
+            upload: tuple[bytes, str] | None = None) -> object:
     """Call one endpoint and return the decoded JSON, or None for an empty body.
 
     Reads retry on 429, 5xx and network errors. Writes retry on 429 only: a
     429 was refused before processing, while a 5xx or a dropped connection can
     follow a commit, and re-sending would duplicate a permanent write.
+
+    `upload` is a raw body and its Content-Type, for the two image routes.
     """
     url = BASE_URL + path
     if params:
@@ -110,6 +122,8 @@ def request(method: str, path: str, params: dict | None = None,
     headers = {"api-key": api_key(), "Accept": "application/json"}
     if data:
         headers["Content-Type"] = "application/json"
+    elif upload:
+        data, headers["Content-Type"] = upload
 
     write = method != "GET"
     global _api_calls
@@ -135,7 +149,8 @@ def request(method: str, path: str, params: dict | None = None,
             if retryable and attempt < retries:
                 time.sleep(2 ** attempt)
                 continue
-            note = WRITE_INTERRUPTED if write and exc.code >= 500 else None
+            note = (RATE_LIMITED if exc.code == 429
+                    else WRITE_INTERRUPTED if write and exc.code >= 500 else None)
             raise HevyError(exc.code, raw, url, note) from None
         except urllib.error.URLError as exc:
             if not write and attempt < retries:
@@ -176,6 +191,15 @@ def read_json_arg(source: str) -> dict:
     return json.loads(text)
 
 
+def read_image_arg(source: str) -> tuple[bytes, str]:
+    """Load an image file and name its Content-Type from the extension."""
+    path = pathlib.Path(source)
+    content_type = IMAGE_TYPES.get(path.suffix.lower())
+    if not content_type:
+        sys.exit(f"{source}: the image must be a .jpg, .jpeg, .png or .webp file")
+    return path.read_bytes(), content_type
+
+
 def emit(value: object) -> None:
     json.dump(value, sys.stdout, indent=2, ensure_ascii=False)
     sys.stdout.write("\n")
@@ -184,12 +208,12 @@ def emit(value: object) -> None:
 def require_confirmation(args: argparse.Namespace) -> None:
     """Refuse a write unless it was asked for explicitly.
 
-    The API has no delete route, so a create is permanent and an update
-    overwrites. The flag is the only undo available.
+    The API cannot delete training data, so a create is permanent and an
+    update overwrites. The flag is the only undo available.
     """
     if not getattr(args, "yes", False):
         sys.exit("This command writes to your Hevy account and cannot be undone.\n"
-                 "The API has no delete route. Re-run with --yes to proceed.")
+                 "The API cannot delete training data. Re-run with --yes to proceed.")
 
 
 def exercise_catalogue(refresh: bool = False) -> list[dict]:
@@ -571,6 +595,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("update-workout", help="PUT /v1/workouts/{workoutId}")
     p.add_argument("workout_id")
     p.add_argument("body", help="JSON file, or - for stdin")
+    p = sub.add_parser("add-workout-image", help="POST /v1/workouts/{workoutId}/images")
+    p.add_argument("workout_id")
+    p.add_argument("image", help="a .jpg, .jpeg, .png or .webp file")
     p = listing("events", "GET /v1/workouts/events")
     p.add_argument("--since", help="ISO 8601, defaults to the epoch")
 
@@ -611,6 +638,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("update-measurement", help="PUT /v1/body_measurements/{date}")
     p.add_argument("date", help="YYYY-MM-DD")
     p.add_argument("body", help="JSON file, or - for stdin")
+    p = sub.add_parser("set-measurement-image",
+                       help="PUT /v1/body_measurements/{date}/image")
+    p.add_argument("date", help="YYYY-MM-DD")
+    p.add_argument("image", help="a .jpg, .jpeg, .png or .webp file")
 
     p = sub.add_parser("summary", help="Aggregate recent training. Reads workouts "
                                       "and body measurements, computes locally.")
@@ -637,10 +668,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-sync", action="store_true",
                    help="skip the freshness sync and query what is on disk")
 
-    # Writes are permanent: the API has no delete route.
-    for name in ("create-workout", "update-workout", "create-routine", "update-routine",
-                 "create-folder", "create-template", "create-measurement",
-                 "update-measurement"):
+    # Writes are permanent: the API cannot delete training data.
+    for name in ("create-workout", "update-workout", "add-workout-image",
+                 "create-routine", "update-routine", "create-folder",
+                 "create-template", "create-measurement", "update-measurement",
+                 "set-measurement-image"):
         sub.choices[name].add_argument(
             "--yes", action="store_true",
             help="confirm this permanent write")
@@ -731,6 +763,10 @@ def run(args: argparse.Namespace) -> object:
         require_confirmation(args)
         return request("PUT", f"/v1/workouts/{seg(args.workout_id)}",
                        body=read_json_arg(args.body))
+    if cmd == "add-workout-image":
+        require_confirmation(args)
+        return request("POST", f"/v1/workouts/{seg(args.workout_id)}/images",
+                       upload=read_image_arg(args.image))
     if cmd == "events":
         # Sent explicitly: the spec's epoch default returns nothing (observed.md).
         extra = {"since": args.since or "1970-01-01T00:00:00Z"}
@@ -798,6 +834,10 @@ def run(args: argparse.Namespace) -> object:
         require_confirmation(args)
         return request("PUT", f"/v1/body_measurements/{seg(args.date)}",
                        body=read_json_arg(args.body))
+    if cmd == "set-measurement-image":
+        require_confirmation(args)
+        return request("PUT", f"/v1/body_measurements/{seg(args.date)}/image",
+                       upload=read_image_arg(args.image))
 
     if cmd == "cache":
         return run_cache_command(args)

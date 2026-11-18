@@ -6,9 +6,10 @@ Hevy's OpenAPI document
     skills/hevy-api/openapi.corrected.json
 
 `openapi.json` is Hevy's own OpenAPI document, published at
-https://api.hevyapp.com/docs. It is extracted from the Swagger UI bundle that
-serves it and re-serialised with no change of content, so that the corrections
-in `spec-patches.json` have a fixed reference to be checked against.
+https://developers.hevy.com/docs. It is downloaded from
+https://developers.hevy.com/openapi.json, which that page loads, and
+re-serialised with no change of content, so that the corrections in
+`spec-patches.json` have a fixed reference to be checked against.
 `openapi.corrected.json` is generated from it.
 
 Copyright in that document, including its descriptions and examples, belongs
@@ -20,7 +21,7 @@ Everything else in this repository is original work under the MIT licence:
 the skills, the reference documentation, the client, the checks, and the
 corrections themselves.
 
-Prose in the documentation restates facts from Hevy's document in different
-words and cites it. Sample payloads in the Markdown files reuse example values
+Prose in the documentation restates facts from Hevy's document and its
+developer guides in different words and cites them. Sample payloads in the Markdown files reuse example values
 from Hevy's document, such as ids and workout titles. Its descriptions are not
 reproduced.

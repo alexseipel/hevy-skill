@@ -5,8 +5,8 @@
 
 No request it sends can write. Every read carries your key, and the `POST` and
 `PUT` probes that pin the `401` shape carry an invalid one, which authenticates
-nothing. The Hevy API has no delete route, so test data in a real account is
-permanent.
+nothing. The Hevy API cannot delete training data, so test data in a real
+account is permanent.
 
 Every check names the claim it is testing, so a failure says which line of the
 documentation went stale rather than only that something changed.
@@ -24,6 +24,9 @@ import urllib.parse
 import urllib.request
 
 BASE = "https://api.hevyapp.com"
+# Hevy counts requests in fixed five-minute windows and sends no Retry-After
+# (https://developers.hevy.com/rate-limits).
+RATE_WINDOW_SECONDS = 300
 results: list[tuple[bool, str, str]] = []
 
 
@@ -36,12 +39,9 @@ def call(path: str, **params) -> tuple[int, object]:
                 raw = response.read().decode()
                 return response.status, (json.loads(raw) if raw.strip() else None)
         except urllib.error.HTTPError as exc:
-            # A rate limit is a throttled run, not a stale claim, and reporting
-            # it as a failure points at the wrong line of documentation. The
-            # one 429 seen so far cleared 45 seconds later, and its window is
-            # unmeasured (reference/observed.md#still-not-verified).
+            # A 429 is a throttled run, not a stale claim, so two waits span one window.
             if exc.code == 429 and attempt < 2:
-                time.sleep(15 * (attempt + 1))
+                time.sleep(RATE_WINDOW_SECONDS / 2)
                 continue
             return exc.code, exc.read().decode()[:200]
     raise AssertionError("unreachable")
@@ -61,13 +61,16 @@ def call_dict(path: str, **params) -> dict:
 
 
 def raw_call(path: str, key: str | None = None, method: str = "GET",
-             body: bytes | None = None) -> tuple[int, str, str]:
+             body: bytes | None = None, bearer: str | None = None) -> tuple[int, str, str]:
     """Status, content type and undecoded body, for claims about the body's shape.
 
     A wrong key is safe to send to a write route: it resolves to no account,
     so nothing can be created (reference/observed.md#16-a-401-is-plain-text).
     """
-    headers = {"api-key": key if key is not None else os.environ["HEVY_API_KEY"]}
+    if bearer is not None:
+        headers = {"Authorization": f"Bearer {bearer}"}
+    else:
+        headers = {"api-key": key if key is not None else os.environ["HEVY_API_KEY"]}
     if body is not None:
         headers["Content-Type"] = "application/json"
     req = urllib.request.Request(BASE + path, headers=headers, data=body, method=method)
@@ -80,7 +83,7 @@ def raw_call(path: str, key: str | None = None, method: str = "GET",
                 exc.read().decode("utf-8", "replace").strip())
 
 
-# Row 17: three of these answer plain text and three answer JSON, and nothing
+# Row 17: three of these answer plain text and two answer JSON, and nothing
 # upstream says which is which.
 PLAIN_TEXT_404 = [
     ("/v1/workouts/00000000-0000-0000-0000-000000000000", "Workout not found"),
@@ -92,7 +95,7 @@ JSON_404 = [
     "/v1/body_measurements/1990-01-01",
 ]
 
-# All 22 operations bar the two that validate the body first, so "on every
+# All 24 operations bar the two that validate the body first, so "on every
 # route" is a measurement rather than an inference from one probe.
 NIL = "00000000-0000-0000-0000-000000000000"
 EVERY_ROUTE = [
@@ -100,6 +103,7 @@ EVERY_ROUTE = [
     ("GET", "/v1/workouts?pageSize=1"), ("POST", "/v1/workouts"),
     ("GET", "/v1/workouts/count"), ("GET", "/v1/workouts/events"),
     ("GET", f"/v1/workouts/{NIL}"), ("PUT", f"/v1/workouts/{NIL}"),
+    ("POST", f"/v1/workouts/{NIL}/images"),
     ("GET", "/v1/routines?pageSize=1"), ("POST", "/v1/routines"),
     ("GET", f"/v1/routines/{NIL}"), ("PUT", f"/v1/routines/{NIL}"),
     ("GET", "/v1/routine_folders?pageSize=1"), ("POST", "/v1/routine_folders"),
@@ -110,6 +114,7 @@ EVERY_ROUTE = [
     ("GET", "/v1/body_measurements?pageSize=1"),
     ("GET", "/v1/body_measurements/1990-01-01"),
     ("PUT", "/v1/body_measurements/1990-01-01"),
+    ("PUT", "/v1/body_measurements/1990-01-01/image"),
 ]
 
 # The two routes that validate the body first, with a body each accepts as
@@ -120,6 +125,9 @@ VALIDATES_BEFORE_AUTH = [
      b'{"exercise":{"title":"probe","exercise_type":"weight_reps",'
      b'"equipment_category":"barbell","muscle_group":"chest","other_muscles":[]}}'),
 ]
+
+# Row 19: named in Hevy's guides and not served, so a failure here means one shipped.
+DOCUMENTED_NOT_SERVED = ["/v1/pinned_notes", f"/v1/pinned_notes/{NIL}"]
 
 
 def check(claim: str, expected, actual) -> None:
@@ -186,8 +194,8 @@ def main() -> int:
 
     _, drained = call("/v1/workouts/events", since="2099-01-01T00:00:00Z", pageSize=10)
     if isinstance(drained, dict):
-        check("an empty events feed has no events key", False, "events" in drained)
-        check("an empty events feed sends workouts instead", True, "workouts" in drained)
+        check("an empty events feed sends an empty events array", [], drained.get("events"))
+        check("an empty events feed has no stand-in workouts key", False, "workouts" in drained)
 
     # The feed retains deletions, so any account that has ever deleted a
     # workout pins the deleted-event shape. Deletions are rare, so one page
@@ -201,11 +209,11 @@ def main() -> int:
     check("page=0 returns page 1", (200, 1),
           (lambda s, b: (s, b.get("page")))(*call("/v1/workouts", page=0, pageSize=1)))
     check("page=-1 is rejected", 400, call("/v1/workouts", page=-1, pageSize=1)[0])
-    for path in caps:
-        status, content_type, _ = raw_call(f"{path}?page=99999")
-        check(f"{path} page past the end is 404", 404, status)
-        check(f"{path} sends that 404 as application/json", True,
-              content_type.startswith("application/json"))
+    for path, (key, _, extra) in defaults.items():
+        status, body = call(path, page=99999, pageSize=1, **extra)
+        check(f"{path} page past the end is 200", 200, status)
+        check(f"{path} answers that page with an empty {key} array", [],
+              body.get(key) if isinstance(body, dict) else body)
     check("pageSize=0 is accepted", 200, call("/v1/workouts", pageSize=0)[0])
 
     # Guarded like the blocks below: an account with no workouts skips these
@@ -218,6 +226,7 @@ def main() -> int:
         check("GET /v1/workouts/{id} is not wrapped", False, list(workout.keys()) == ["workout"])
         check("the workout response has no is_private", False, "is_private" in workout)
         check("workouts carry routine_id", True, "routine_id" in listing["workouts"][0])
+        check("workouts carry a media array", list, type(workout.get("media")))
         check("start_time uses the offset format, whole seconds", True,
               bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00",
                                 workout.get("start_time", ""))))
@@ -349,6 +358,13 @@ def main() -> int:
         check(f"that 401 is InvalidApiKey as text/html on {method} {path.split('?')[0]}",
               (True, "InvalidApiKey"), (content_type.startswith("text/html"), body))
 
+    status, content_type, body = raw_call("/v1/user/info", bearer="invalid")
+    check("a wrong bearer token is 401", 401, status)
+    check("that 401 is JSON with a message, unlike the api-key 401",
+          (True, {"message": "Invalid or expired token"}),
+          (content_type.startswith("application/json"),
+           json.loads(body) if body.startswith("{") else body))
+
     for path, well_formed in VALIDATES_BEFORE_AUTH:
         malformed, _, _ = raw_call(path, key="invalid", method="POST", body=b"{}")
         check(f"POST {path} answers 400 before it checks the key", 400, malformed)
@@ -375,6 +391,16 @@ def main() -> int:
     folder_methods = allowed_methods("/v1/routine_folders/1")
     if folder_methods:
         check("a folder can only be read", {"GET", "HEAD"}, folder_methods)
+    check("workout images can only be added", {"POST"},
+          allowed_methods(f"/v1/workouts/{NIL}/images"))
+    check("a measurement image can only be replaced", {"PUT"},
+          allowed_methods("/v1/body_measurements/1990-01-01/image"))
+
+    # Row 20: served but absent from the spec, and the one DELETE under /v1.
+    check("the webhook subscription route allows GET, HEAD, POST and DELETE",
+          {"GET", "HEAD", "POST", "DELETE"}, allowed_methods("/v1/webhook-subscription"))
+    for path in DOCUMENTED_NOT_SERVED:
+        check(f"{path} is documented but not served", set(), allowed_methods(path))
 
     failed = [r for r in results if not r[0]]
     for ok, claim, detail in results:

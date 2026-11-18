@@ -1,52 +1,27 @@
 {
   "_comment": "Corrections applied to Hevy's published OpenAPI document. Each patch asserts what it expects to find, so a patch that stops matching means upstream changed and the correction needs re-checking rather than silently reapplying. See reference/observed.md for how each was verified.",
-  "upstream": "https://api.hevyapp.com/docs/swagger-ui-init.js",
-  "verified_at": "2026-08-24",
-  "upstream_checked_at": "2026-10-27",
+  "upstream": "https://developers.hevy.com/openapi.json",
+  "reads_verified_at": "2026-11-18",
+  "writes_verified_at": "2026-08-23",
+  "upstream_checked_at": "2026-11-18",
   "patches": [
     {
-      "id": "add-servers",
-      "why": "The document declares no server, so a generated client has no base URL. Verified by calling the paths against this origin.",
-      "op": "add",
-      "pointer": "/servers",
-      "value": [
-        {
-          "url": "https://api.hevyapp.com",
-          "description": "Production"
-        }
-      ]
-    },
-    {
-      "id": "add-security-scheme",
-      "why": "securitySchemes is empty and every operation repeats api-key as a plain header parameter. Declaring the scheme once is what lets a generated client handle auth as auth.",
-      "op": "add",
-      "pointer": "/components/securitySchemes",
+      "id": "api-key-401-note",
+      "why": "Upstream declares the scheme but no 401 on any operation, and this 401 is not JSON. Observed 2026-08-22, re-checked on all 24 operations 2026-11-18.",
+      "op": "merge",
+      "pointer": "/components/securitySchemes/apiKey",
       "value": {
-        "ApiKey": {
-          "type": "apiKey",
-          "in": "header",
-          "name": "api-key",
-          "description": "Issued at https://hevy.com/settings?developer. Hevy Pro only. A missing or wrong key returns 401 with the plain-text body InvalidApiKey served as text/html, not JSON. Observed 2026-08-22."
-        }
+        "description": "A personal key, issued at https://developers.hevy.com/api-key to Hevy Pro accounts. A missing or wrong key returns 401 with the plain-text body InvalidApiKey served as text/html, not JSON."
       }
     },
     {
-      "id": "add-global-security",
-      "why": "Every route requires the key, so the requirement belongs at the document level.",
-      "op": "add",
-      "pointer": "/security",
-      "value": [
-        {
-          "ApiKey": []
-        }
-      ]
-    },
-    {
-      "id": "drop-api-key-parameter",
-      "why": "With the security scheme declared, the per-operation api-key header parameter would make a generated client ask for the key twice.",
-      "op": "drop-parameter",
-      "parameter": "api-key",
-      "expect_count": 22
+      "id": "oauth-401-note",
+      "why": "A wrong bearer token answers 401 as JSON, a different shape from the api-key 401, and upstream documents neither. Observed 2026-11-18 with an invalid token; no valid token was exercised.",
+      "op": "merge",
+      "pointer": "/components/securitySchemes/oauth",
+      "value": {
+        "description": "An OAuth access token from https://hevy.com/api/token, valid for one hour. A wrong or expired token returns 401 with {\"message\": \"Invalid or expired token\"} as application/json."
+      }
     },
     {
       "id": "measurement-id",
@@ -103,7 +78,7 @@
     },
     {
       "id": "routine-create-response-wrapped",
-      "why": "Upstream fetched 2026-10-27 declares a routine object. Live writes on 2026-08-23 returned a one-element array. Preserve both shapes until a new authorised write resolves the difference; writes were not repeated during this refresh.",
+      "why": "Upstream declares a routine object. Live writes on 2026-08-23 returned a one-element array. Both shapes stay until an authorised write resolves the difference: no successful write has been repeated since.",
       "op": "replace",
       "pointer": "/paths/~1v1~1routines/post/responses/201/content/application~1json/schema",
       "from": {
@@ -141,7 +116,7 @@
     },
     {
       "id": "routine-update-response-wrapped",
-      "why": "Upstream fetched 2026-10-27 declares a routine object. Live writes on 2026-08-23 returned a one-element array. Preserve both shapes until a new authorised write resolves the difference; writes were not repeated during this refresh.",
+      "why": "Upstream declares a routine object. Live writes on 2026-08-23 returned a one-element array. Both shapes stay until an authorised write resolves the difference: no successful write has been repeated since.",
       "op": "replace",
       "pointer": "/paths/~1v1~1routines~1{routineId}/put/responses/200/content/application~1json/schema",
       "from": {
@@ -291,30 +266,6 @@
           }
         }
       }
-    },
-    {
-      "id": "events-not-required-when-empty",
-      "why": "events is required by the spec, but a feed with nothing to report omits it and sends an empty workouts array instead. Observed 2026-08-23.",
-      "op": "replace",
-      "pointer": "/components/schemas/PaginatedWorkoutEvents/required",
-      "from": ["page", "page_count", "events"],
-      "to": ["page", "page_count"]
-    },
-    {
-      "id": "events-empty-shape-note",
-      "why": "The stand-in workouts key is behaviour a client has to survive, so the schema says so.",
-      "op": "merge",
-      "pointer": "/components/schemas/PaginatedWorkoutEvents",
-      "value": {
-        "description": "When the feed has nothing to report, events is absent and an empty workouts array takes its place. Read events with a default."
-      }
     }
-  ],
-  "page_not_found_routes": [
-    "/v1/workouts",
-    "/v1/workouts/events",
-    "/v1/routines",
-    "/v1/routine_folders",
-    "/v1/exercise_templates"
   ]
 }

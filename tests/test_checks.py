@@ -17,6 +17,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+import urllib.error
 from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -74,10 +75,34 @@ class CorrectedSpecTest(unittest.TestCase):
 
     def test_a_new_upstream_fix_still_fails_instead_of_silently_skipping(self):
         upstream = json.loads(builder.UPSTREAM.read_text())
-        upstream["servers"] = [{"url": "https://api.hevyapp.com"}]
-        config = json.loads(builder.PATCHES.read_text())
-        with self.assertRaisesRegex(builder.PatchError, "add-servers.*already exists"):
-            builder.apply_patch(upstream, config["patches"][0])
+        upstream["components"]["schemas"]["BodyMeasurement"]["properties"]["id"] = {
+            "type": "integer"}
+        patches = {p["id"]: p for p in json.loads(builder.PATCHES.read_text())["patches"]}
+        with self.assertRaisesRegex(builder.PatchError, "measurement-id.*already exists"):
+            builder.apply_patch(upstream, patches["measurement-id"])
+
+    def test_upstream_already_declares_its_server_and_both_security_schemes(self):
+        """The four patches that added these went when Hevy did it, and a
+        regression upstream should fail here rather than in a generated client."""
+        upstream = json.loads(builder.UPSTREAM.read_text())
+        self.assertEqual(upstream["servers"], [{"url": "https://api.hevyapp.com"}])
+        self.assertEqual(upstream["security"], [{"apiKey": []}, {"oauth": []}])
+        for item in upstream["paths"].values():
+            for operation in item.values():
+                names = [p["name"] for p in operation.get("parameters", [])]
+                self.assertNotIn("api-key", names)
+
+    def test_a_moved_spec_fails_with_a_message_instead_of_a_traceback(self):
+        gone = urllib.error.HTTPError(builder.SPEC_URL, 404, "Not Found", None,
+                                      io.BytesIO(b""))
+        self.addCleanup(gone.close)
+        with mock.patch.object(builder.urllib.request, "urlopen", side_effect=gone):
+            with self.assertRaisesRegex(builder.PatchError, "may have moved"):
+                builder.fetch_upstream()
+        not_a_spec = io.BytesIO(b'{"error": "nothing here"}')
+        with mock.patch.object(builder.urllib.request, "urlopen", return_value=not_a_spec):
+            with self.assertRaisesRegex(builder.PatchError, "OpenAPI document"):
+                builder.fetch_upstream()
 
     def test_fetch_rebuilds_from_the_downloaded_spec(self):
         upstream = json.loads(builder.UPSTREAM.read_text())
@@ -91,7 +116,8 @@ class CorrectedSpecTest(unittest.TestCase):
                 document = json.loads(builder.build(True))
             self.assertEqual(json.loads(path.read_text()), upstream)
             self.assertEqual(document["info"]["title"], "Updated upstream title")
-            self.assertEqual(document["security"], [{"ApiKey": []}])
+            self.assertIn("InvalidApiKey",
+                          document["components"]["securitySchemes"]["apiKey"]["description"])
 
 
 class FrontmatterYamlTest(unittest.TestCase):

@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -30,7 +30,8 @@ SKILL = ROOT / "skills" / "hevy-api"
 UPSTREAM = SKILL / "openapi.json"
 PATCHES = SKILL / "spec-patches.json"
 CORRECTED = SKILL / "openapi.corrected.json"
-SWAGGER_BUNDLE = "https://api.hevyapp.com/docs/swagger-ui-init.js"
+# The document Hevy's API reference at developers.hevy.com/docs loads.
+SPEC_URL = "https://developers.hevy.com/openapi.json"
 
 
 class PatchError(RuntimeError):
@@ -53,27 +54,8 @@ def resolve(document: object, pointer: str) -> tuple[object, str]:
 def apply_patch(document: dict, patch: dict) -> None:
     op, pid = patch["op"], patch["id"]
 
-    if op == "drop-parameter":
-        removed = 0
-        for item in document["paths"].values():
-            for operation in item.values():
-                params = operation.get("parameters")
-                if not isinstance(params, list):
-                    continue
-                keep = [p for p in params if p.get("name") != patch["parameter"]]
-                removed += len(params) - len(keep)
-                if keep:
-                    operation["parameters"] = keep
-                else:
-                    del operation["parameters"]
-        if removed != patch["expect_count"]:
-            raise PatchError(f"{pid}: expected {patch['expect_count']} occurrences of "
-                             f"'{patch['parameter']}', found {removed}")
-        return
-
     if op in ("set-parameter-default", "drop-parameter-default"):
-        # Addressed by name, never by array index: dropping the api-key
-        # parameter shifts every index, and so would any upstream reorder.
+        # Addressed by name, never by array index, which an upstream reorder shifts.
         operation = document["paths"][patch["route"]][patch["method"]]
         matches = [p for p in operation.get("parameters", [])
                    if p.get("name") == patch["parameter"]]
@@ -134,46 +116,18 @@ def apply_patch(document: dict, patch: dict) -> None:
         raise PatchError(f"{pid}: unknown op '{op}'")
 
 
-def add_page_not_found(document: dict, routes: list[str]) -> int:
-    """A page past the end returns 404 on every list route, undocumented."""
-    added = 0
-    for route in routes:
-        responses = document["paths"][route]["get"]["responses"]
-        if "404" in responses:
-            continue
-        responses["404"] = {
-            "description": "Page number past the last page",
-            # JSON here, unlike the plain-text 404s on three single-item routes
-            # (reference/observed.md row 17).
-            "content": {"application/json": {"schema": {
-                "type": "object",
-                "properties": {"error": {"type": "string"}},
-                "example": {"error": "Page not found"},
-            }}},
-        }
-        added += 1
-    return added
-
-
 def fetch_upstream() -> dict:
-    """Pull the spec out of the Swagger UI bundle, which is where Hevy serves it."""
-    with urllib.request.urlopen(SWAGGER_BUNDLE, timeout=30) as response:
-        text = response.read().decode()
-    start = text.index("{", text.index('"swaggerDoc":') + len('"swaggerDoc":'))
-    depth, in_string, escaped = 0, False, False
-    for index in range(start, len(text)):
-        char = text[index]
-        if escaped:
-            escaped = False
-        elif char == "\\":
-            escaped = True
-        elif char == '"':
-            in_string = not in_string
-        elif not in_string:
-            depth += 1 if char == "{" else -1 if char == "}" else 0
-            if depth == 0:
-                return json.loads(text[start:index + 1])
-    raise PatchError("could not find swaggerDoc in the Swagger UI bundle")
+    """Download Hevy's OpenAPI document, failing loudly when it has moved."""
+    try:
+        with urllib.request.urlopen(SPEC_URL, timeout=30) as response:
+            document = json.load(response)
+    except (urllib.error.URLError, ValueError) as exc:
+        raise PatchError(f"could not read an OpenAPI document from {SPEC_URL}: {exc}. "
+                         f"Hevy may have moved it; find what its API reference "
+                         f"loads now.") from None
+    if not isinstance(document, dict) or not document.get("paths"):
+        raise PatchError(f"{SPEC_URL} did not answer with an OpenAPI document")
+    return document
 
 
 def build(fetch: bool) -> str:
@@ -191,22 +145,20 @@ def build(fetch: bool) -> str:
         apply_patch(document, patch)
         print(f"  [ok] {patch['id']}")
 
-    added = add_page_not_found(document, config["page_not_found_routes"])
-    print(f"  [ok] page-not-found ({added} routes)")
-
-    document["info"]["description"] = (
-        document["info"].get("description", "").rstrip()
-        + f"\n\n      CORRECTED COPY. {len(config['patches'])} corrections based on live "
-          f"observations dated {config['verified_at']}, plus 404 responses on "
-          f"{added} list routes. The upstream document is openapi.json, and the "
-          f"corrections are listed in spec-patches.json and reference/observed.md. "
-          f"Upstream reviewed on {config['upstream_checked_at']}; later write "
-          f"response changes remain unverified.\n      ")
-    document["info"]["x-corrections-verified-at"] = config["verified_at"]
+    note = (f"CORRECTED COPY. {len(config['patches'])} corrections from live "
+            f"observations: read behaviour last checked on "
+            f"{config['reads_verified_at']}, write responses last observed on "
+            f"{config['writes_verified_at']}. The upstream document is "
+            f"openapi.json, reviewed on {config['upstream_checked_at']}, and the "
+            f"corrections are listed in spec-patches.json and reference/observed.md.")
+    upstream_description = document["info"].get("description", "").strip()
+    document["info"]["description"] = "\n\n".join(filter(None, [upstream_description, note]))
+    document["info"]["x-reads-verified-at"] = config["reads_verified_at"]
+    document["info"]["x-writes-verified-at"] = config["writes_verified_at"]
     document["info"]["x-upstream-checked-at"] = config["upstream_checked_at"]
     document["info"]["x-corrections-source"] = "spec-patches.json"
     document["info"]["x-upstream"] = {
-        "source": "https://api.hevyapp.com/docs",
+        "source": SPEC_URL,
         "notice": "Derived from Hevy's own OpenAPI document. Copyright in the "
                   "original, including its descriptions and examples, belongs to "
                   "Hevy. The corrections are MIT licensed; the underlying document "

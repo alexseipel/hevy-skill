@@ -1,23 +1,24 @@
 ---
 name: hevy-api
-description: "Call the Hevy REST API at api.hevyapp.com from any language: workouts, routines, routine folders, exercise templates, exercise history, body measurements, user info. Covers all 22 endpoints under /v1, the api-key header, pageSize caps, the workout-events sync feed, and the set and exercise shapes routines and workouts share. Use when reading or writing Hevy training data, syncing a workout cache, creating routines or custom exercises, importing gym logs, or debugging a Hevy API response."
+description: "Call the Hevy REST API at api.hevyapp.com from any language: workouts, routines, routine folders, exercise templates, exercise history, body measurements, user info. Covers all 24 endpoints under /v1, the api-key header, OAuth bearer tokens, scopes and webhooks, rate limits, pageSize caps, the workout-events sync feed, and the set and exercise shapes routines and workouts share. Use when reading or writing Hevy training data, syncing a workout cache, creating routines or custom exercises, importing gym logs, building a Hevy OAuth app, or debugging a Hevy API response."
 license: MIT
 ---
 
 # Hevy API
 
 A read-and-write REST API over one Hevy account. Every route is under
-`https://api.hevyapp.com/v1`, takes the key in an `api-key` header, returns
-JSON except where noted, and acts on the account that owns the key. There is
-no OAuth, no user scoping and no delete route.
+`https://api.hevyapp.com/v1`, returns JSON except where noted, and acts on the
+account behind the credential. No route deletes training data.
 
-**The API is available to Hevy Pro accounts only.** The key is issued at
-`https://hevy.com/settings?developer`.
+**Two credentials work.** A personal key goes in an `api-key` header, needs
+Hevy Pro and is issued at `https://developers.hevy.com/api-key`. An OAuth
+access token goes in `Authorization: Bearer`, for an app other Hevy users
+connect ([reference/auth.md](reference/auth.md)).
 
 ## Before the first call
 
 ```bash
-export HEVY_API_KEY="…"   # from https://hevy.com/settings?developer
+export HEVY_API_KEY="…"   # from https://developers.hevy.com/api-key
 
 curl -s "https://api.hevyapp.com/v1/user/info" -H "api-key: $HEVY_API_KEY"
 # {"data":{"id":"9c465af3-…","username":"jhon","name":"John doe","url":"https://hevy.com/user/jhon","weight_unit":"kg","distance_unit":"kilometers","is_pro":true}}
@@ -27,7 +28,7 @@ Never put the key in a URL, a source file or a committed fixture.
 
 ## The endpoints
 
-All 22, grouped by resource. Every one requires the `api-key` header.
+All 24, grouped by resource. Every one accepts either credential.
 
 ### [Workouts](reference/workouts.md)
 
@@ -39,6 +40,7 @@ All 22, grouped by resource. Every one requires the `api-key` header.
 | GET    | `/v1/workouts/events`   | `{page, page_count, events[]}` for syncing  |
 | GET    | `/v1/workouts/{workoutId}` | a `Workout`                              |
 | PUT    | `/v1/workouts/{workoutId}` | `200`, as `{workout: [ … ]}`             |
+| POST   | `/v1/workouts/{workoutId}/images` | `201`, the updated `Workout`      |
 
 ### [Routines](reference/routines.md)
 
@@ -74,6 +76,7 @@ All 22, grouped by resource. Every one requires the `api-key` header.
 | POST   | `/v1/body_measurements`       | `201`, empty body                         |
 | GET    | `/v1/body_measurements/{date}` | a `BodyMeasurement`                      |
 | PUT    | `/v1/body_measurements/{date}` | `200`, empty body                        |
+| PUT    | `/v1/body_measurements/{date}/image` | `200`, the updated `BodyMeasurement` |
 
 ### [User](reference/user.md)
 
@@ -97,11 +100,33 @@ route:
 | `/v1/body_measurements`  | 10               | 10      |
 
 Send `pageSize` explicitly. These defaults come from the spec fetched on
-2026-10-27 ([reference/observed.md](reference/observed.md#4-page-size-defaults)).
+2026-11-18 ([reference/observed.md](reference/observed.md#4-page-size-defaults)).
 
-Exceeding the cap returns `400`. Loop while `page <= page_count`, reading
-`page_count` from the first response. A page past the last returns `404`, and
-`page=0` returns page 1.
+Exceeding the cap returns `400`, and `page=0` returns page 1. Loop while
+`page <= page_count`, reading `page_count` from the first response.
+
+**A page past the last answers `200` with an empty array.** It was a `404`
+when checked on 2026-10-27, so a loop that stops on `404` no longer stops.
+Observed 2026-11-18, not documented
+([reference/observed.md](reference/observed.md#5-and-6-page-bounds)).
+
+## Rate limits
+
+| Applies to                     | Limit               | Counted per |
+| ------------------------------ | ------------------- | ----------- |
+| every request                  | 1,000 per 5 minutes | IP address  |
+| `POST /v1/workouts`            | 1,000 per 24 hours  | account     |
+| `POST /v1/routines`            | 40 per 5 minutes    | account     |
+| `PUT /v1/routines/{routineId}` | 20 per 5 minutes    | account     |
+| `POST /v1/routine_folders`     | 20 per 5 minutes    | account     |
+| the two image routes together  | 100 per 24 hours    | account     |
+
+These are [Hevy's published limits](https://developers.hevy.com/rate-limits),
+each a fixed window opened by the first request. Past one the API answers `429`
+with an empty body and no `Retry-After`, so wait for the window to pass. The
+personal key and every connected app share an account's limits.
+
+Hevy also asks for scheduled fetches on a random minute, not `xx:00`.
 
 ## Errors
 
@@ -109,18 +134,21 @@ Exceeding the cap returns `400`. Loop while `page <= page_count`, reading
 | ------ | -------------------------------------------- | --------------------------------------------------- |
 | 400    | list routes                                  | `pageSize` over the cap, or a negative `page`       |
 | 400    | POST and PUT routes                          | an invalid body. `error` is a string, except on `POST /v1/exercise_templates` |
-| 401    | everywhere                                   | missing or wrong `api-key`, after body validation on two POSTs |
-| 403    | `POST /v1/routines`                          | routine limit: free plan only, unreachable on active Pro |
-| 403    | `POST /v1/exercise_templates`                | `{"error": "exceeds-custom-exercise-limit"}`, free plan only |
+| 401    | everywhere                                   | missing or wrong credential, after body validation on two POSTs |
+| 403    | `POST /v1/routines`                          | `{"error": "routine-limit-exceeded", "message": …}`, free accounts only |
+| 403    | `POST /v1/exercise_templates`                | `{"error": "exceeds-custom-exercise-limit", "message": …}`, free accounts only |
 | 404    | single-item GETs, `PUT /v1/routines/{id}`    | no such item, or it belongs to another account      |
-| 404    | list routes                                  | `page` past `page_count`                            |
 | 409    | `POST /v1/body_measurements`                 | a measurement already exists for that date          |
+| 413    | the two image routes                         | an image over 10 MB                                 |
+| 415    | the two image routes                         | a `Content-Type` other than JPEG, PNG or WebP       |
+| 429    | everywhere                                   | over a rate limit: empty body, no `Retry-After`     |
 | 500    | `GET /v1/workouts/events`                    | documented, so retry with backoff                   |
 
-**An error body is not reliably JSON.** A `401` is the plain string
-`InvalidApiKey` as `text/html`, and three of the six `404`s are plain text too.
-Read the status first, the body as text. Observed 2026-08-24, not documented
-([reference/observed.md](reference/observed.md#17-a-404-body-is-plain-text-on-half-the-routes)).
+**An error body is not reliably JSON.** A wrong key's `401` is the plain string
+`InvalidApiKey` as `text/html`, a wrong token's is JSON, and three of the five
+`404`s are plain text. Read the status first, the body as text. Observed
+2026-11-18, not documented
+([reference/observed.md](reference/observed.md#17-a-404-body-is-plain-text-on-three-routes)).
 
 **`GET /v1/exercise_history/{id}` answers `200` and an empty array for an
 unknown id**, not the `404` every other path-id route gives, so a wrong id
@@ -130,19 +158,16 @@ reads as an exercise never trained
 ## Syncing a local cache
 
 `GET /v1/workouts/events` returns `updated` and `deleted` events newest first,
-filtered by `since`, so a client need not refetch everything.
-
-1. Store the timestamp before you start the run.
-2. Page through `/v1/workouts/events?since=<last run>` until `page` reaches
-   `page_count`.
-3. For `type: "updated"`, upsert `event.workout`. For `type: "deleted"`,
-   delete `event.id`.
-4. Save the stored timestamp as the new watermark, so a workout written during
-   the run is picked up next time.
+filtered by `since`, so a client need not refetch everything. The loop is in
+[reference/recipes.md](reference/recipes.md#keeping-a-local-copy-in-step).
 
 **The spec's epoch default for `since` is wrong**: omitting it returns no
 events ([reference/observed.md](reference/observed.md)). Send it on every call,
 from the epoch for the first backfill, sized with `GET /v1/workouts/count`.
+
+An OAuth app can take a `workout.created` webhook instead of polling, though
+edits and deletions arrive through the feed alone
+([reference/auth.md](reference/auth.md#app-webhooks)).
 
 ## Writing data
 
@@ -163,17 +188,10 @@ every omitted field to `null`. Read, merge, send the whole object back.
 - **A superset id can be `0`.** It indexes supersets within one workout, so
   `if (superset_id)` drops the first superset of every workout. Test against
   `null`.
-- **The corrected spec retains patches for unresolved differences.** Upstream
-  has fixed the superset field and pagination defaults
-  ([reference/observed.md](reference/observed.md)).
-- **`GET /v1/routines/{routineId}` wraps its result in `{routine: …}`**, while
-  the workout, folder and template equivalents return the object bare.
 - **Workout write responses contain an array.** Read `body.workout[0]`.
   Routine writes now document `body.routine` as an object, but earlier live
   writes returned an array. Handle both until re-verified
   ([reference/routines.md](reference/routines.md)).
-- **`POST /v1/exercise_templates` does not return JSON.** The body is the new
-  template's UUID as plain text, served as `text/html`.
 - **A read cannot be written back untouched.** The write schemas reject
   unrecognized keys. Strip `index` from every set, `index` and `title` from
   every exercise, or the `PUT` is a `400`.
@@ -187,9 +205,14 @@ every omitted field to `null`. Read, merge, send the whole object back.
   pair of 10 kg dumbbells goes in as 20 kg. People log one hand instead and
   nothing distinguishes them, so such an account understates its volume
   ([reference/recipes.md](reference/recipes.md#dumbbell-weight-is-the-total-and-nothing-enforces-it)).
-- **No delete route, and no hidden one under `/v1`**: the `Allow` headers list
-  `GET`, `HEAD`, `POST` and `PUT` only. Deleting stays a job for the Hevy app
-  ([reference/observed.md](reference/observed.md#no-hidden-delete-route)).
+- **No hidden route deletes training data either**: every resource's `Allow`
+  header lists `GET`, `HEAD`, `POST` and `PUT` only. Deleting stays a job for
+  the Hevy app
+  ([reference/observed.md](reference/observed.md#no-delete-route-for-training-data)).
+- **Hevy's guides name four pinned-note routes the API answers `404` on**
+  ([reference/observed.md](reference/observed.md#19-the-guides-name-routes-the-api-does-not-serve)).
+- **An image upload sends the raw file as the body**, untested here
+  ([reference/workouts.md](reference/workouts.md#post-v1workoutsworkoutidimages)).
 - **A write can reach the mobile app late**, showing in the web interface while
   the phone still shows nothing. Check the web before concluding a write failed
   ([reference/observed.md](reference/observed.md#a-write-can-reach-the-mobile-app-late)).
@@ -197,16 +220,14 @@ every omitted field to `null`. Read, merge, send the whole object back.
   filter spans six templates, and a title stored in an old workout can differ
   from the catalogue's. Group, filter and join on `exercise_template_id`
   ([reference/observed.md](reference/observed.md#an-exercise-title-is-a-display-name-not-an-identity)).
-- **The two documented `403` limits are free-plan limits**, at 4 routines and 7
-  custom exercises. An active Pro key cannot reach either branch, and a lapsed
-  one is unverified
-  ([reference/observed.md](reference/observed.md#the-403-limits-are-free-plan-limits)).
+- **The two `403` limits bind free accounts only**, at 4 routines and 7 custom
+  exercises
+  ([reference/observed.md](reference/observed.md#the-403-limits-are-free-account-limits)).
 - **150 sets per workout and per routine**, on Pro too, per Hevy's help centre.
   The status returned for a longer one is unmeasured.
-- **The API is explicitly unstable.** Its own documentation says the structure
-  may change or the project may be abandoned, so pin behaviour with tests.
-- **Schedule repeated fetches away from `xx:00`.** Hevy asks callers to choose
-  a random minute in its [API documentation](https://api.hevyapp.com/docs).
+- **The API changes without notice.** Between 2026-10-27 and 2026-11-18 the
+  spec moved and a `404` became a `200`, under an unchanged `info.version`. Pin
+  behaviour with tests.
 
 ## The local mirror is off, and stays off unless asked
 
@@ -218,10 +239,9 @@ stored.**
 or how slow a summary was. Putting training data on disk is the user's decision
 to make unprompted.
 
-Two moments justify raising it. The user asks about local storage, caching,
-offline use or slow repeated queries. Or the client printed its own hint after
-ten API calls, in which case relay it and stop, the trigger being a measurement
-rather than a guess.
+Raise it in two cases only. The user asks about local storage, caching,
+offline use or slow repeated queries, or the client printed its own hint after
+ten API calls: relay that hint and stop.
 
 **Pass every cache notice on to the user.** `hevy.py` writes one to stderr on
 every cache read, write and deletion. Swallowing them turns a disclosed cache
@@ -260,11 +280,12 @@ mirror.
 | File                                                     | What is in it                                     |
 | -------------------------------------------------------- | ------------------------------------------------- |
 | [reference/objects.md](reference/objects.md)             | every shared object and enum, field by field      |
-| [reference/workouts.md](reference/workouts.md)           | the six workout routes, with bodies and responses |
+| [reference/workouts.md](reference/workouts.md)           | the seven workout routes, with bodies and responses |
 | [reference/routines.md](reference/routines.md)           | routines and routine folders, seven routes        |
 | [reference/exercises.md](reference/exercises.md)         | templates and exercise history, four routes       |
-| [reference/measurements.md](reference/measurements.md)   | body measurements, four routes                    |
+| [reference/measurements.md](reference/measurements.md)   | body measurements, five routes                    |
 | [reference/user.md](reference/user.md)                   | the account route, and what it does not expose    |
+| [reference/auth.md](reference/auth.md)                   | the personal key, the OAuth flow, scopes and webhooks |
 | [reference/observed.md](reference/observed.md)           | live observations, upstream fixes and open differences |
 | [reference/recipes.md](reference/recipes.md)             | the multi-call workflows: search, summary, sync   |
 | [openapi.json](openapi.json)                             | the pinned upstream spec, kept unedited            |

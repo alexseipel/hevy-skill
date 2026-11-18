@@ -9,7 +9,6 @@ differences: a routine set adds `rep_range`, and a routine exercise adds
 
 | Parameter  | In     | Default | Notes        |
 | ---------- | ------ | ------- | ------------ |
-| `api-key`  | header | —       | required     |
 | `page`     | query  | 1       | 1 or greater |
 | `pageSize` | query  | 10      | maximum 10 |
 
@@ -28,8 +27,8 @@ it at the top.
 
 Returns `201`. The current [spec](../openapi.json) declares
 `{"routine": {...}}`, with the routine as an object. Live writes on
-2026-08-23 returned `{"routine": [{...}]}` instead, and successful writes
-were not repeated during the 2026-10-27 refresh.
+2026-08-23 returned `{"routine": [{...}]}` instead, and no successful write
+has been repeated since.
 
 Handle both shapes until re-verified
 ([observed.md](observed.md#11-writes-answer-with-the-object-wrapped-and-in-an-array)):
@@ -68,10 +67,14 @@ curl -s -X POST "https://api.hevyapp.com/v1/routines" \
           ] } ] } }'
 ```
 
-`403` means the account is at its routine limit, which is a free-plan limit of
-4 routines: an active Pro key cannot reach it
-([observed.md](observed.md#the-403-limits-are-free-plan-limits)). Retrying
+`403` returns `{"error": "routine-limit-exceeded", "message": "…"}`. The spec
+describes a free-account limit of 4 routines, not counting routines inside
+programs, which an active Pro account cannot reach
+([observed.md](observed.md#the-403-limits-are-free-account-limits)). Retrying
 does not help.
+
+Hevy limits this route to 40 calls per 5 minutes for each account, and the
+update route to 20 ([SKILL.md](../SKILL.md#rate-limits)).
 
 ## GET /v1/routines/{routineId}
 
@@ -90,7 +93,7 @@ object and the previously observed array.
 The spec documents `400` here rather than `404`. The body is
 `{"error": "Routine not found"}` as JSON, unlike the plain-text `404`s on
 workouts, folders and templates
-([observed.md](observed.md#17-a-404-body-is-plain-text-on-half-the-routes)).
+([observed.md](observed.md#17-a-404-body-is-plain-text-on-three-routes)).
 
 ## PUT /v1/routines/{routineId}
 
@@ -114,7 +117,6 @@ list. Ids are numbers here, unlike the UUID strings every other resource uses.
 
 | Parameter  | In     | Default | Notes        |
 | ---------- | ------ | ------- | ------------ |
-| `api-key`  | header | —       | required     |
 | `page`     | query  | 1       | 1 or greater |
 | `pageSize` | query  | 10      | maximum 10   |
 
@@ -153,7 +155,7 @@ curl -s "https://api.hevyapp.com/v1/routine_folders/42" -H "api-key: $HEVY_API_K
 
 Returns a bare `RoutineFolder`. `404` if the folder does not exist, sent as the
 bare text `Routine folder not found` rather than JSON
-([observed.md](observed.md#17-a-404-body-is-plain-text-on-half-the-routes)).
+([observed.md](observed.md#17-a-404-body-is-plain-text-on-three-routes)).
 
 To move a routine between folders, change `folder_id` with
 `PUT /v1/routines/{routineId}`.
