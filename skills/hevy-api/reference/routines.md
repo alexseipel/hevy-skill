@@ -25,19 +25,10 @@ it at the top.
 
 ## POST /v1/routines
 
-Returns `201`. The current [spec](../openapi.json) declares
-`{"routine": {...}}`, with the routine as an object. Live writes on
-2026-08-23 returned `{"routine": [{...}]}` instead, and no successful write
-has been repeated since.
-
-Handle both shapes until re-verified
-([observed.md](observed.md#11-writes-answer-with-the-object-wrapped-and-in-an-array)):
-
-```python
-routine = body["routine"]
-if isinstance(routine, list):
-    routine = routine[0]
-```
+Returns `201` as `{"routine": {...}}`, with the routine as an object, as the
+[spec](../openapi.json) declares and a live create confirmed on 2026-11-18.
+On 2026-08-23 the same call answered `{"routine": [{...}]}`
+([observed.md](observed.md#11-writes-answer-with-the-object-wrapped-and-in-an-array)).
 
 The request body wraps everything in a `routine` key too.
 
@@ -87,9 +78,6 @@ curl -s "https://api.hevyapp.com/v1/routines/$ROUTINE_ID" -H "api-key: $HEVY_API
 template equivalents return the object bare, so a shared unwrapping helper has
 to special-case it.
 
-Here the wrapper holds an object. For writes, handle both the documented
-object and the previously observed array.
-
 The spec documents `400` here rather than `404`. The body is
 `{"error": "Routine not found"}` as JSON, unlike the plain-text `404`s on
 workouts, folders and templates
@@ -100,13 +88,20 @@ workouts, folders and templates
 Returns `200`, wrapped like the create response. The request body is the same
 shape as the create body, with `notes` nullable.
 
-**It replaces the routine.** Verified on 2026-08-23 the same way as the workout
+**It replaces the routine.** Verified on 2026-11-18 the same way as the workout
 route: two exercises in, one sent on the update, one left afterwards. Send the
 full exercise list every time, stripped of the keys only reads carry: `index`
 on sets, `index` and `title` on exercises
-([observed.md](observed.md#write-behaviour)). A routine cannot be emptied,
-because `exercises: []` is a `400`. `404` means the routine does not exist or
-belongs to another account.
+([observed.md](observed.md#write-behaviour)).
+
+**Drop a null `rep_range` too.** A read returns `"rep_range": null` for a set
+without one, and sending that back is a `400`, though the spec marks the field
+nullable. Omit the key, or send `{"start": null, "end": null}`
+([observed.md](observed.md#22-a-routine-update-refuses-the-null-it-returns)).
+
+A routine cannot be emptied, because `exercises: []` is a `400`. An omitted
+`folder_id` leaves the routine in its folder. `404` means the routine does not
+exist or belongs to another account.
 
 ## Routine folders
 
@@ -128,7 +123,7 @@ curl -s "https://api.hevyapp.com/v1/routine_folders" -H "api-key: $HEVY_API_KEY"
 ### POST /v1/routine_folders
 
 Returns `201` as `{"routine_folder": { … }}`, wrapped in a key and holding an
-object, as observed on 2026-08-23
+object, as observed on 2026-11-18
 ([observed.md](observed.md#11-writes-answer-with-the-object-wrapped-and-in-an-array)).
 `title` is the only field you send.
 
@@ -139,7 +134,7 @@ curl -s -X POST "https://api.hevyapp.com/v1/routine_folders" \
 ```
 
 **A new folder always lands at index 0**, and every existing folder shifts down
-by one. Verified on 2026-08-23: five folders at indexes 0 to 4 became 1 to 5,
+by one. Verified on 2026-08-23 and 2026-11-18: each folder's index rose by one,
 relative order intact. Cached `index` values are stale the moment this call
 succeeds, so refetch the list rather than adjusting them locally.
 

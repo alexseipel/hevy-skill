@@ -2,7 +2,7 @@
   "_comment": "Corrections applied to Hevy's published OpenAPI document. Each patch asserts what it expects to find, so a patch that stops matching means upstream changed and the correction needs re-checking rather than silently reapplying. See reference/observed.md for how each was verified.",
   "upstream": "https://developers.hevy.com/openapi.json",
   "reads_verified_at": "2026-11-18",
-  "writes_verified_at": "2026-08-23",
+  "writes_verified_at": "2026-11-18",
   "upstream_checked_at": "2026-11-18",
   "patches": [
     {
@@ -58,7 +58,7 @@
     },
     {
       "id": "workout-update-response-wrapped",
-      "why": "PUT /v1/workouts/{workoutId} wraps its response the same way as the create. Observed 2026-08-23.",
+      "why": "PUT /v1/workouts/{workoutId} wraps its response the same way as the create. Observed 2026-08-23 and again 2026-11-18.",
       "op": "replace",
       "pointer": "/paths/~1v1~1workouts~1{workoutId}/put/responses/200/content/application~1json/schema",
       "from": { "$ref": "#/components/schemas/Workout" },
@@ -77,84 +77,16 @@
       }
     },
     {
-      "id": "routine-create-response-wrapped",
-      "why": "Upstream declares a routine object. Live writes on 2026-08-23 returned a one-element array. Both shapes stay until an authorised write resolves the difference: no successful write has been repeated since.",
+      "id": "routine-update-rep-range-not-null",
+      "why": "The spec marks rep_range nullable on a routine update, and a read returns null for a set without one. Sending that null back answers 400, \"Expected object, received null\". An object whose start and end are null is accepted and reads back as null. Observed 2026-11-18 on PUT only: the create route was not sent a null.",
       "op": "replace",
-      "pointer": "/paths/~1v1~1routines/post/responses/201/content/application~1json/schema",
-      "from": {
-        "type": "object",
-        "properties": {
-          "routine": {
-            "$ref": "#/components/schemas/Routine"
-          }
-        }
-      },
-      "to": {
-        "type": "object",
-        "required": [
-          "routine"
-        ],
-        "properties": {
-          "routine": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Routine"
-              },
-              {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Routine"
-                },
-                "minItems": 1,
-                "maxItems": 1,
-                "description": "The created routine, as the array's only element."
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "id": "routine-update-response-wrapped",
-      "why": "Upstream declares a routine object. Live writes on 2026-08-23 returned a one-element array. Both shapes stay until an authorised write resolves the difference: no successful write has been repeated since.",
-      "op": "replace",
-      "pointer": "/paths/~1v1~1routines~1{routineId}/put/responses/200/content/application~1json/schema",
-      "from": {
-        "type": "object",
-        "properties": {
-          "routine": {
-            "$ref": "#/components/schemas/Routine"
-          }
-        }
-      },
-      "to": {
-        "type": "object",
-        "required": [
-          "routine"
-        ],
-        "properties": {
-          "routine": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Routine"
-              },
-              {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Routine"
-                },
-                "minItems": 1,
-                "maxItems": 1,
-                "description": "The updated routine, as the array's only element."
-              }
-            ]
-          }
-        }
-      }
+      "pointer": "/components/schemas/PutRoutinesRequestSet/properties/rep_range/nullable",
+      "from": true,
+      "to": false
     },
     {
       "id": "folder-create-response-wrapped",
-      "why": "POST /v1/routine_folders returns {\"routine_folder\": {...}}, wrapped in a key but not in an array. Observed 2026-08-23.",
+      "why": "POST /v1/routine_folders returns {\"routine_folder\": {...}}, wrapped in a key but not in an array. Observed 2026-08-23 and again 2026-11-18.",
       "op": "replace",
       "pointer": "/paths/~1v1~1routine_folders/post/responses/201/content/application~1json/schema",
       "from": { "$ref": "#/components/schemas/RoutineFolder" },
@@ -168,7 +100,7 @@
     },
     {
       "id": "template-create-response-plain-text",
-      "why": "POST /v1/exercise_templates answers with the new template's UUID as bare text under text/html, not the {\"id\": <integer>} the spec declares. Observed 2026-08-23.",
+      "why": "POST /v1/exercise_templates answers with the new template's UUID as bare text under text/html, not the {\"id\": <integer>} the spec declares. Observed 2026-08-23 and again 2026-11-18.",
       "op": "replace",
       "pointer": "/paths/~1v1~1exercise_templates/post/responses/200/content",
       "from": {
@@ -239,7 +171,7 @@
     },
     {
       "id": "template-create-400-error-object",
-      "why": "The 400 body's error is an object holding an issues array, not the string the spec declares. Every other route that answers {\"error\": \u2026} sends a string, so a caller cannot treat the field uniformly. Observed 2026-08-24.",
+      "why": "The 400 body's error is an object holding an issues array, not the string the spec declares. Every other route that answers {\"error\": \u2026} sends a string, so a caller cannot treat the field uniformly. Observed 2026-08-24, and with a valid key 2026-11-18.",
       "op": "replace",
       "pointer": "/paths/~1v1~1exercise_templates/post/responses/400/content",
       "from": {
@@ -260,7 +192,10 @@
               "error": {
                 "type": "object",
                 "description": "A validation report, not a message",
-                "properties": { "issues": { "type": "array", "items": { "type": "object" } } }
+                "properties": {
+                  "issues": { "type": "array", "items": { "type": "object" } },
+                  "name": { "type": "string", "example": "ZodError" }
+                }
               }
             }
           }

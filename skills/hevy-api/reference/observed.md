@@ -3,7 +3,7 @@
 The [upstream spec](../openapi.json) was refreshed from
 [Hevy's OpenAPI document](https://developers.hevy.com/openapi.json) on
 **2026-11-18**. It holds 24 operations, the earlier 22 and two image uploads,
-and six more patches are redundant. The numbered observations below retain
+and eight more patches are redundant. The numbered observations below retain
 their original numbering for links.
 
 **The spec moved.** The Swagger bundle at `api.hevyapp.com/docs` that served it
@@ -11,10 +11,9 @@ now answers `404`, and that address redirects to `developers.hevy.com/docs`.
 This repository's weekly drift job fetched the bundle on 2026-11-02 and has
 failed since 2026-11-09.
 
-Read checks last ran on **2026-11-18** with `scripts/verify_live.py`.
-Successful writes were last tested on 2026-08-23
-([write behaviour](#write-behaviour)), so a new specification is not evidence
-that a write response was tested again.
+Read checks last ran on **2026-11-18** with `scripts/verify_live.py`. All ten
+write routes were exercised by hand the same day, on test objects created for
+it ([write behaviour](#write-behaviour)).
 
 Re-run the check before trusting a row:
 
@@ -38,17 +37,19 @@ header and an OAuth bearer token, so the four patches that added them are gone.
 | 8 | `Workout.routine_id` | `string` | **nullable**, `null` for an unplanned workout. Fixed upstream |
 | 9 | Timestamp format | `2021-09-14T12:00:00Z` everywhere | **two formats**, see below |
 | 10 | `GET /v1/workouts/events` | `since` defaults to the epoch | **omitting `since` returns no events at all** |
-| 11 | every write that returns a body | returns the bare object | **wrapped in a key**. Workout create fixed upstream, routine writes now document an object |
+| 11 | every write that returns a body | returns the bare object | **wrapped in a key**. Upstream now documents all but the workout update and the folder create |
 | 12 | `POST /v1/exercise_templates` | `{"id": <integer>}` | **a bare UUID string as `text/html`** |
 | 13 | `POST /v1/body_measurements` | `200` | **`201`**. Fixed upstream |
 | 14 | `GET /v1/workouts/events` with nothing to report | `events: []` | formerly a `workouts` key instead. **Fixed on the server** by 2026-11-18 |
 | 15 | `GET /v1/routines/{routineId}`, unknown id | `200` and `400` only | **`404`**, like every other single-item GET |
 | 16 | a wrong or missing credential | no `401` documented | **the plain string `InvalidApiKey` as `text/html`** for a key, **JSON** for a bearer token |
 | 17 | a `404` body | JSON, where it is declared at all | **plain text as `text/html` on three routes**, JSON on two |
-| 18 | `POST /v1/exercise_templates`, invalid body | `error` is a string | **an object holding an `issues` array** |
+| 18 | `POST /v1/exercise_templates`, invalid body | `error` is a string | **an object holding an `issues` array** and a `name` |
 | 19 | four pinned-note operations | absent | **named in Hevy's guides, `404` on the server** |
 | 20 | `/v1/webhook-subscription` | absent | **served**, allowing `GET`, `POST` and `DELETE` |
 | 21 | a rate-limited request | no `429` declared | **documented outside the spec**: empty body, no `Retry-After` |
+| 22 | `rep_range` on `PUT /v1/routines/{routineId}` | nullable | **`null` is a `400`**. An object of nulls clears it |
+| 23 | errors on the two image routes | no body declared | **JSON for `400`, `404` and `415`, an HTML page for `413`** |
 
 ## 1. The superset field is not renamed
 
@@ -170,26 +171,26 @@ Re-checked 2026-11-18.
 
 ## 11. Writes answer with the object wrapped, and in an array
 
-The live writes on 2026-08-23 returned `{"workout": [ {...} ]}` for workout
-creates and updates, and `{"routine": [ {...} ]}` for routine writes.
-The array held one element.
+| Route | Answer on 2026-11-18 | Spec |
+| ----- | -------------------- | ---- |
+| `POST /v1/workouts` | `{"workout": [ {...} ]}`, a one-element array | the same |
+| `PUT /v1/workouts/{workoutId}` | `{"workout": [ {...} ]}` | **a bare `Workout`** |
+| `POST /v1/workouts/{workoutId}/images` | a bare `Workout` | the same |
+| `POST`/`PUT` routines | `{"routine": {...}}`, an object | the same |
+| `POST /v1/routine_folders` | `{"routine_folder": {...}}` | **a bare `RoutineFolder`** |
+| `PUT /v1/body_measurements/{date}/image` | a bare `BodyMeasurement` | the same |
+| `GET /v1/routines/{routineId}` | `{"routine": {...}}` | the same |
+| every other `GET` for one item | the bare object | the same |
 
-The spec has documented the workout create wrapper since 2026-10-27. It
-describes routine writes as `{"routine": {...}}`, with an object instead of
-the previously observed array. No successful write has been repeated since
-2026-08-23, so that change remains unverified against the live API.
+Two rows still disagree with the spec, and the corrected spec patches both.
 
-| Route | Shape to handle |
-| ----- | --------------- |
-| `POST`/`PUT` workouts | `{"workout": [ {...} ]}`, a one-element array |
-| `POST`/`PUT` routines | `{"routine": {...}}` in the current spec, or the earlier observed array |
-| `POST /v1/routine_folders` | `{"routine_folder": {...}}`, observed 2026-08-23 |
-| `GET /v1/routines/{routineId}` | `{"routine": {...}}`, checked 2026-11-18 |
-| every other `GET` for one item | the bare object |
+**Routine writes changed shape.** On 2026-08-23 they answered
+`{"routine": [ {...} ]}`, an array like the workout routes. On 2026-11-18 both
+answered the object the spec documents, so the two `oneOf` patches were
+removed. A client written against the August shape breaks on `routine[0]`.
 
-The corrected spec uses `oneOf` for the two routine write shapes. Accept
-either until an authorised write confirms which the server currently returns.
-The client passes the decoded response through unchanged.
+One workout now answers in three shapes: bare from the `GET` and the image
+upload, and inside a one-element array from the create and the update.
 
 ## 12. Creating an exercise template answers with plain text
 
@@ -203,6 +204,8 @@ Content-Type: text/html; charset=utf-8
 36 bytes, no JSON, no quotes. The spec promises `{"id": <integer>}`, so a
 client parsing the body throws and one reading `.id` gets nothing. The value is
 the new template's id, a UUID string like every other, not an integer.
+
+Observed 2026-08-23 and again 2026-11-18.
 
 ## 13. Creating a measurement answers `201`
 
@@ -271,10 +274,12 @@ being a `404` ([5 and 6](#5-and-6-page-bounds)).
 
 ## 18. An invalid template body answers with an error object
 
-`POST /v1/exercise_templates` sends `{"error": {"issues": [...]}}`, an object,
-where the spec declares `error` as a string. `POST /v1/body_measurements` does
+`POST /v1/exercise_templates` sends
+`{"error": {"issues": [...], "name": "ZodError"}}`, an object, where the spec
+declares `error` as a string. `POST /v1/body_measurements` does
 send a string, but the string is itself a JSON document, so neither route gives
-a message you can show a user. Observed 2026-08-24.
+a message you can show a user. Observed 2026-08-24, and with a valid key on
+2026-11-18.
 
 ## 19. The guides name routes the API does not serve
 
@@ -331,6 +336,38 @@ empty body and no `Retry-After`. The spec declares a `429` on no operation.
 Rapid reads drew a `429` in August 2026. None was provoked on 2026-11-18, so
 the documented shape is unobserved.
 
+## 22. A routine update refuses the null it returns
+
+A routine set without a rep range reads back as `"rep_range": null`, and the
+spec marks the field nullable on `PutRoutinesRequestSet`. Sending that `null`
+to `PUT /v1/routines/{routineId}` answers `400`:
+
+```json
+{"error":"Expected object, received null. Expected object, received null"}
+```
+
+One message per offending set, and none names the field. Omitting the key is
+accepted, and so is `{"start": null, "end": null}`, which reads back as `null`.
+Observed 2026-11-18 on the update route only: the create route was not sent a
+`null`.
+
+## 23. Error bodies on the image routes
+
+| Status | Trigger | Body |
+| ------ | ------- | ---- |
+| `400` | bytes that are no image | `{"error":"The request body is not a JPEG, PNG or WebP image"}` |
+| `400` | a fourth upload to one workout | `{"error":"A workout can have at most 3 images and videos"}` |
+| `400` | a malformed date on the measurement route | `{"error":"Invalid date"}` |
+| `404` | an unknown workout | `{"error":"Workout not found"}` |
+| `404` | a date with no entry | `{"error":"Body measurement not found"}` |
+| `413` | an 11 MB body | an HTML page reading `Payload Too Large`, as `text/html` |
+| `415` | another `Content-Type`, none, or an empty body | `{"error":"Send the image file as the request body with Content-Type image/jpeg, image/png or image/webp"}` |
+
+The spec declares a body for the `400` alone. `GET /v1/workouts/{workoutId}`
+sends its `404` as plain text
+([17](#17-a-404-body-is-plain-text-on-three-routes)), so one unknown workout
+id has two error shapes. Observed 2026-11-18.
+
 ## Fields added in the current spec
 
 `UserInfo` now documents `username`, `weight_unit`, `distance_unit` and
@@ -346,7 +383,7 @@ code ([the `403` limits](#the-403-limits-are-free-account-limits)).
 
 The same refresh added `Workout.media`, an array of `WorkoutMedia`, and
 `BodyMeasurement.picture_url`. Every workout read on 2026-11-18 carried
-`media`, and no measurement carried `picture_url`
+`media`, and a measurement carried `picture_url` only once a picture was set
 ([objects.md](objects.md#workoutmedia)).
 
 `PostWorkoutsRequestBody` now requires `workout`, and its object requires
@@ -393,42 +430,83 @@ only to find that id ([recipes.md](recipes.md#finding-an-exercise-by-name)).
 
 ## Write behaviour
 
-All eight write routes were exercised once against a real account on
-**2026-08-23**. The test objects had to be removed by hand, the API being
-unable to delete them.
+All ten write routes were exercised against a real account on **2026-11-18**,
+repeating the 2026-08-23 run and adding the two image routes. The test objects
+have to be removed by hand, the API being unable to delete them.
 
 | Behaviour | Result |
 | --------- | ------ |
 | `PUT /v1/workouts/{workoutId}` with fewer exercises | **full replace**: two exercises became one |
-| `PUT /v1/routines/{routineId}` with fewer exercises | **full replace**, same as workouts |
-| `PUT /v1/body_measurements/{date}` with one field | **full overwrite**: `fat_percent` and `chest_cm` were erased |
+| `PUT /v1/routines/{routineId}` with fewer exercises | **full replace**, same as workouts. An omitted `folder_id` left the folder alone |
+| `PUT /v1/body_measurements/{date}` with one field | **full overwrite**: `fat_percent` and `chest_cm` were erased, the picture kept |
 | `POST /v1/body_measurements` on an existing date | `409` with `{"error":"A measurement for this date already exists"}` |
-| `superset_id` sent as `0`, then as `null` | round-trips unchanged, under the same field name |
+| `superset_id` sent as `0` | round-trips unchanged, under the same field name |
 | `rpe`, `rest_seconds`, `rep_range` | all round-trip unchanged |
+| routine `notes` and workout `is_private` | accepted, and absent from every read |
 | `POST /v1/routine_folders` | lands at **index 0** and pushes every existing folder down by one |
 | `PUT` with the object just read | **`400`**: the write schemas reject unrecognized keys |
 | `PUT /v1/routines/{routineId}` with `exercises: []` | `400`, "Array must contain at least 1 element(s)" |
-| a set of `-100` kg times `-5` reps, an empty title, `sets: []` | all accepted: no range validation |
+| a set of `-100` kg times `-5` reps, an empty workout title | both accepted: no range validation |
+| an exercise sent with `sets: []` | accepted, and the exercise is missing from the stored workout |
+| 151 sets in one exercise | **accepted** on a routine and on a workout ([below](#the-150-set-cap-is-not-enforced)) |
+| several updates to one workout | one `updated` event in the feed, carrying the latest state |
 
-The folder case was measured: five folders at indexes 0 to 4 became 1 to 5,
-relative order intact, with the new folder at 0. No folder update or delete
-route exists, so the API cannot put the order back.
+The folder case was measured twice: every existing folder moved from its index
+to the next, relative order intact, with the new folder at 0. No folder update
+or delete route exists, so the API cannot put the order back.
 
 Deleting a workout in the app surfaces in `/v1/workouts/events` as
 `{"type": "deleted", "id": "…", "deleted_at": "…"}`: all three fields present,
 with `deleted_at` in the `Z`-millisecond format. The feed retains deletions, so
 `verify_live.py` pins that shape on any account that holds one.
 
-**A read response cannot be written back as it is.** The write schemas reject
-undeclared keys, and a read carries three:
+**A read response cannot be written back as it is.** The workout and routine
+write schemas reject undeclared keys:
 
 ```json
-{"error":"Unrecognized key(s) in object: 'index'. Unrecognized key(s) in object: 'index', 'title'"}
+{"error":"Unrecognized key(s) in object: 'index'. Unrecognized key(s) in object: 'index', 'title'. Unrecognized key(s) in object: 'media'"}
 ```
 
-Strip `index` from every set and `index` and `title` from every exercise, and
-the same `PUT` returns `200`. Identical on workouts and routines. Measurements
-were already documented this way: `date`, `id` and `created_at` come out first.
+Strip `index` from every set, `index` and `title` from every exercise and
+`media` from a workout, and the same `PUT` returns `200`. A routine also needs
+its null rep ranges dropped
+([22](#22-a-routine-update-refuses-the-null-it-returns)).
+
+**`PUT /v1/body_measurements/{date}` is the exception.** With `id`,
+`created_at`, `date`, `picture_url` or an invented key in the body it answered
+`200` each time, and the stored entry held only the measurement fields sent.
+
+### Image uploads
+
+| Behaviour | Result |
+| --------- | ------ |
+| a 1,200 by 1,600 PNG sent to a workout | `201`, stored as a 600 by 800 JPEG |
+| the same PNG sent to a measurement | `200`, stored as a 900 by 1,200 JPEG |
+| a 64 by 64 WebP | stored as a 64 by 64 JPEG: nothing is enlarged |
+| a fourth image on one workout | `400` |
+| `PUT /v1/workouts/{workoutId}` after an upload | **media kept**, same URLs |
+| a second upload to one measurement | replaces the picture under a new URL |
+| an upload to a workout | moves `updated_at` and shows in the events feed |
+
+A media item is `{"type": "image", "url": "…"}`. Both routes store under one
+CloudFront host, and the URLs answered without a key, the private workout's
+included. No video was attached, so `thumbnail_url` is unobserved.
+
+### The 150-set cap is not enforced
+
+Hevy's help centre describes
+[a cap of 150 sets per workout and per routine](https://help.hevyapp.com/hc/en-us/articles/34896183826455-Hevy-Set-Limit-Explained-Why-Workouts-and-Routines-Have-a-150-Set-Cap).
+A `PUT` carrying 151 sets in one exercise answered `200` on a routine and on a
+workout, and the routine read back with all 151. How the app treats such an
+object was not checked, so stay under 150 regardless.
+
+### A removed custom exercise still answers by id
+
+Three custom exercises created through the API on 2026-08-23 were absent from
+`GET /v1/exercise_templates` on 2026-11-18, and each still answered `200` to
+`GET /v1/exercise_templates/{exerciseTemplateId}`. They were due to be deleted
+in the app, which was not witnessed. Check the list, not the single-item
+route, to learn whether an exercise still exists.
 
 ## No delete route for training data
 
@@ -492,26 +570,17 @@ OAuth app are the candidates, since the OAuth guide names no plan. Neither
 What a lapsed subscription does is unverified. Treat the status as a plan
 problem rather than something to retry, not as impossible.
 
-**A limit that does apply to Pro**: [150 sets per workout and per routine](https://help.hevyapp.com/hc/en-us/articles/34896183826455-Hevy-Set-Limit-Explained-Why-Workouts-and-Routines-Have-a-150-Set-Cap),
-which an import that flattens a long session can meet. The status code it
-returns has not been measured.
-
 ## Still not verified
 
-- **The status code of the 150-set cap.** Meeting it takes a write carrying
-  151 sets.
 - **A key whose Pro subscription has lapsed.** The `403` reasoning above
   stands on Pro entitlement tracking the key, and nobody has watched a key
   outlive its plan.
 - **Anything behind a bearer token.** No OAuth app was created, so the flow,
   the scopes and the app webhook in [auth.md](auth.md) rest on Hevy's guide
   alone.
-- **The routine write shape.** An object in the spec, an array when last
-  written on 2026-08-23
-  ([11](#11-writes-answer-with-the-object-wrapped-and-in-an-array)).
 - **The personal webhook.** The body `POST /v1/webhook-subscription` takes and
   the payload it delivers.
 - **The `429` body.** Documented as empty with no `Retry-After`, and unobserved.
-- **A successful image upload.** Both routes are documented from the spec.
-  Whether a later `PUT` of the workout or the measurement keeps the image is
-  unknown.
+- **A `null` rep range on the routine create.** Only the update was sent one
+  ([22](#22-a-routine-update-refuses-the-null-it-returns)).
+- **Video media.** No workout read carried one.

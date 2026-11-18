@@ -99,8 +99,10 @@ not list it, so do not expect to read it back.
 | `url`           | string | the image or video, required             |
 | `thumbnail_url` | string | videos only                              |
 
-`media` joined the spec on 2026-11-18 and was an empty array on every workout
-read that day. No write schema carries it: images arrive through
+`media` joined the spec on 2026-11-18. A workout without images carries an
+empty array, and an uploaded image came back as `{"type": "image", "url": …}`.
+No write schema carries the field, and a `PUT` that includes it is a `400`:
+images arrive through
 [their own route](workouts.md#post-v1workoutsworkoutidimages).
 
 ## Routine
@@ -170,7 +172,7 @@ other field is a nullable number.
 
 A response also carries **`id`** and **`created_at`**, which the spec omits, and
 it **leaves out any field that was never recorded** rather than sending `null`.
-Strip `id` and `created_at` before writing the entry back.
+The measurement `PUT` ignores both if they are sent back.
 
 `picture_url`, a nullable read-only string, joined the spec on 2026-11-18. It
 is set through
@@ -187,6 +189,9 @@ centimetres all the same.
 
 `PutBodyMeasurement` is the same object without `date`, which comes from the
 path instead. It has no `id` and no `created_at` either.
+
+A routine set's `rep_range` reads as `null` and cannot be written as `null`
+([observed.md](observed.md#22-a-routine-update-refuses-the-null-it-returns)).
 
 ## Timestamps
 

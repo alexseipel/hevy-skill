@@ -33,7 +33,9 @@ are short hex strings such as `3BC06AD3`, not the UUIDs the spec's examples show
 routine you create depends on that map, and rebuilding it per call wastes the
 largest page budget the API offers.
 
-`is_custom` separates the account's own exercises from the built-in set.
+`is_custom` separates the account's own exercises from the built-in set. A
+custom exercise that has left this list can still answer by id
+([observed.md](observed.md#a-removed-custom-exercise-still-answers-by-id)).
 
 ## POST /v1/exercise_templates
 
@@ -76,7 +78,7 @@ curl -s -X POST "https://api.hevyapp.com/v1/exercise_templates" \
 
 Every enum value is listed in [objects.md](objects.md#enums). A value outside
 those lists is a `400`, and here alone `error` holds an object rather than a
-message: `{"error": {"issues": [...]}}`. This route also validates the body
+message: `{"error": {"issues": [...], "name": "ZodError"}}`. This route also validates the body
 before it checks the key, so a `400` does not mean the key was accepted
 ([observed.md](observed.md#18-an-invalid-template-body-answers-with-an-error-object)).
 

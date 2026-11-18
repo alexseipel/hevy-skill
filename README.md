@@ -84,7 +84,7 @@ lists every command.
 
 Upstream declares its server and security schemes itself since 2026-11-18,
 which retired four corrections. One command re-pins Hevy's document from
-`developers.hevy.com/openapi.json` and re-applies the remaining 15 from
+`developers.hevy.com/openapi.json` and re-applies the remaining 14 from
 [spec-patches.json](skills/hevy-api/spec-patches.json):
 
 ```bash
@@ -198,13 +198,13 @@ HEVY_API_KEY=... python3 skills/hevy-api/scripts/verify_live.py
 
 The count varies by account: checks needing routines, folders or
 measurements are skipped when there are none. Its write probes carry an
-invalid key, so write behaviour was verified once by hand
+invalid key, so write behaviour is verified by hand
 ([observed.md](skills/hevy-api/reference/observed.md)). A failure names the
 claim it broke.
 
-The 2026-11-18 refresh checked reads without creating or changing training
-data. Routine writes document an object where the last live writes returned an
-array, so the corrected spec accepts both until an authorised write resolves it.
+On 2026-11-18 all ten write routes were exercised by hand as well, on test
+objects created for it. Routine writes now answer with the object the spec
+documents, where they sent an array in August.
 
 Conventions for editing the skills: [AGENTS.md](AGENTS.md). Getting a change
 merged: [CONTRIBUTING.md](CONTRIBUTING.md).

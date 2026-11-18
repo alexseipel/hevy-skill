@@ -122,9 +122,10 @@ and `PUT /v1/routines/{routineId}` drop omitted exercises the same way,
 verified live ([observed.md](observed.md#write-behaviour)).
 
 Read the object, change the one field, strip the keys only reads carry, send it
-back. For a workout or routine that is `index` on every set plus `index` and
-`title` on every exercise, and for a measurement `date`, `id` and `created_at`.
-Unrecognized keys are a `400` ([observed.md](observed.md#write-behaviour)).
+back. For a workout or routine that is `index` on every set, `index` and
+`title` on every exercise, `media` on a workout and any null `rep_range`.
+Unrecognized keys are a `400` there, while the measurement route ignores them
+([observed.md](observed.md#write-behaviour)).
 
 The client refuses a write without `--yes`, because a mistake is permanent.
 

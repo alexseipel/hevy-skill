@@ -47,9 +47,9 @@ All 24, grouped by resource. Every one accepts either credential.
 | Method | Path                       | Returns                          |
 | ------ | -------------------------- | -------------------------------- |
 | GET    | `/v1/routines`             | `{page, page_count, routines[]}` |
-| POST   | `/v1/routines`             | `201`, `{routine: …}`, see reference     |
+| POST   | `/v1/routines`             | `201`, `{routine}`, wrapped      |
 | GET    | `/v1/routines/{routineId}` | `{routine}`, wrapped             |
-| PUT    | `/v1/routines/{routineId}` | `200`, `{routine: …}`, see reference     |
+| PUT    | `/v1/routines/{routineId}` | `200`, `{routine}`, wrapped      |
 
 ### [Routine folders](reference/routines.md#routine-folders)
 
@@ -145,8 +145,9 @@ Hevy also asks for scheduled fetches on a random minute, not `xx:00`.
 | 500    | `GET /v1/workouts/events`                    | documented, so retry with backoff                   |
 
 **An error body is not reliably JSON.** A wrong key's `401` is the plain string
-`InvalidApiKey` as `text/html`, a wrong token's is JSON, and three of the five
-`404`s are plain text. Read the status first, the body as text. Observed
+`InvalidApiKey` as `text/html`, a wrong token's is JSON, three `404`s are
+plain text and the `413` is an HTML page. Read the status first, the body as
+text. Observed
 2026-11-18, not documented
 ([reference/observed.md](reference/observed.md#17-a-404-body-is-plain-text-on-three-routes)).
 
@@ -188,13 +189,12 @@ every omitted field to `null`. Read, merge, send the whole object back.
 - **A superset id can be `0`.** It indexes supersets within one workout, so
   `if (superset_id)` drops the first superset of every workout. Test against
   `null`.
-- **Workout write responses contain an array.** Read `body.workout[0]`.
-  Routine writes now document `body.routine` as an object, but earlier live
-  writes returned an array. Handle both until re-verified
-  ([reference/routines.md](reference/routines.md)).
-- **A read cannot be written back untouched.** The write schemas reject
-  unrecognized keys. Strip `index` from every set, `index` and `title` from
-  every exercise, or the `PUT` is a `400`.
+- **Workout writes answer with an array, routine writes with an object.** Read
+  `body.workout[0]` and `body.routine`
+  ([reference/observed.md](reference/observed.md#11-writes-answer-with-the-object-wrapped-and-in-an-array)).
+- **A read cannot be written back untouched.** Strip `index` from every set,
+  `index` and `title` from every exercise, `media` from a workout and a null
+  `rep_range` from a routine set, or the `PUT` is a `400`.
 - **`rpe` accepts only `6, 7, 7.5, 8, 8.5, 9, 9.5, 10`** or `null`.
 - **Reading a template gives `equipment`**, while creating one takes
   `equipment_category`.
@@ -211,7 +211,7 @@ every omitted field to `null`. Read, merge, send the whole object back.
   ([reference/observed.md](reference/observed.md#no-delete-route-for-training-data)).
 - **Hevy's guides name four pinned-note routes the API answers `404` on**
   ([reference/observed.md](reference/observed.md#19-the-guides-name-routes-the-api-does-not-serve)).
-- **An image upload sends the raw file as the body**, untested here
+- **An image upload sends the raw file as the body**, not JSON or multipart
   ([reference/workouts.md](reference/workouts.md#post-v1workoutsworkoutidimages)).
 - **A write can reach the mobile app late**, showing in the web interface while
   the phone still shows nothing. Check the web before concluding a write failed
@@ -223,8 +223,9 @@ every omitted field to `null`. Read, merge, send the whole object back.
 - **The two `403` limits bind free accounts only**, at 4 routines and 7 custom
   exercises
   ([reference/observed.md](reference/observed.md#the-403-limits-are-free-account-limits)).
-- **150 sets per workout and per routine**, on Pro too, per Hevy's help centre.
-  The status returned for a longer one is unmeasured.
+- **The API does not enforce the 150-set cap** in Hevy's help centre: 151 sets
+  were accepted. Stay under it anyway
+  ([reference/observed.md](reference/observed.md#the-150-set-cap-is-not-enforced)).
 - **The API changes without notice.** Between 2026-10-27 and 2026-11-18 the
   spec moved and a `404` became a `200`, under an unchanged `info.version`. Pin
   behaviour with tests.

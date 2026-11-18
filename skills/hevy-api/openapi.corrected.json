@@ -3,9 +3,9 @@
   "info": {
     "title": "Hevy Public API Docs",
     "version": "0.0.1",
-    "description": "CORRECTED COPY. 15 corrections from live observations: read behaviour last checked on 2026-11-18, write responses last observed on 2026-08-23. The upstream document is openapi.json, reviewed on 2026-11-18, and the corrections are listed in spec-patches.json and reference/observed.md.",
+    "description": "CORRECTED COPY. 14 corrections from live observations: read behaviour last checked on 2026-11-18, write responses last observed on 2026-11-18. The upstream document is openapi.json, reviewed on 2026-11-18, and the corrections are listed in spec-patches.json and reference/observed.md.",
     "x-reads-verified-at": "2026-11-18",
-    "x-writes-verified-at": "2026-08-23",
+    "x-writes-verified-at": "2026-11-18",
     "x-upstream-checked-at": "2026-11-18",
     "x-corrections-source": "spec-patches.json",
     "x-upstream": {
@@ -350,7 +350,7 @@
           },
           "rep_range": {
             "type": "object",
-            "nullable": true,
+            "nullable": false,
             "description": "Range of reps for the set, if applicable",
             "properties": {
               "start": {
@@ -1920,25 +1920,9 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "routine"
-                  ],
                   "properties": {
                     "routine": {
-                      "oneOf": [
-                        {
-                          "$ref": "#/components/schemas/Routine"
-                        },
-                        {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/components/schemas/Routine"
-                          },
-                          "minItems": 1,
-                          "maxItems": 1,
-                          "description": "The created routine, as the array's only element."
-                        }
-                      ]
+                      "$ref": "#/components/schemas/Routine"
                     }
                   }
                 }
@@ -2079,25 +2063,9 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "routine"
-                  ],
                   "properties": {
                     "routine": {
-                      "oneOf": [
-                        {
-                          "$ref": "#/components/schemas/Routine"
-                        },
-                        {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/components/schemas/Routine"
-                          },
-                          "minItems": 1,
-                          "maxItems": 1,
-                          "description": "The updated routine, as the array's only element."
-                        }
-                      ]
+                      "$ref": "#/components/schemas/Routine"
                     }
                   }
                 }
@@ -2246,6 +2214,10 @@
                           "items": {
                             "type": "object"
                           }
+                        },
+                        "name": {
+                          "type": "string",
+                          "example": "ZodError"
                         }
                       }
                     }
