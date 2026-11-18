@@ -6,8 +6,9 @@ An agent skill for the [Hevy](https://hevy.com) training API: every endpoint of
 `api.hevyapp.com/v1`, the object shapes behind them, and a dependency-free
 client to call them with.
 
-All 22 operations are covered, and a CI check proves it. The upstream spec was
-refreshed on 2026-10-27, retiring twelve corrections Hevy has incorporated.
+All 24 operations are covered, and a CI check proves it. The upstream spec was
+refreshed on 2026-11-18, after Hevy moved its documentation and added OAuth
+and image uploads.
 [observed.md](skills/hevy-api/reference/observed.md) records the remaining
 differences, live verification dates and unresolved write response changes.
 
@@ -44,7 +45,7 @@ appears anywhere, so nothing here is tied to one vendor.
 
 ## Use it
 
-Get a key at `https://hevy.com/settings?developer`, which needs Hevy Pro:
+Get a key at `https://developers.hevy.com/api-key`, which needs Hevy Pro:
 
 ```bash
 export HEVY_API_KEY="..."
@@ -53,7 +54,7 @@ export HEVY_API_KEY="..."
 Then ask the agent in your own words: "sync my last month of Hevy workouts
 into a CSV", "chart my bench press over the past year".
 
-The client also runs on its own, with 26 commands: one per endpoint, plus
+The client also runs on its own, with 28 commands: one per endpoint, plus
 `summary`, `sync`, `sql` and `cache`. Standard library only, on Python 3.11 or
 newer. CI tests Python 3.11 and 3.15 with the latest available patch releases.
 
@@ -66,10 +67,11 @@ python3 skills/hevy-api/scripts/hevy.py summary --weeks 4 --unit lb
 python3 skills/hevy-api/scripts/hevy.py workouts --all | jq '.[].title'
 ```
 
-**Write commands refuse to run without `--yes`**, because the API has no delete
-route: a create is permanent and an update overwrites. A failed write is never re-sent
-either, except on `429`: a `5xx` or a dropped connection can follow a commit,
-so the error says the write may have landed. `--help` lists every command.
+**Write commands refuse to run without `--yes`**, because the API cannot
+delete training data: a create is permanent and an update overwrites. A failed
+write is never re-sent either, except on `429`: a `5xx` or a dropped connection
+can follow a commit, so the error says the write may have landed. `--help`
+lists every command.
 
 ## What this has that a Hevy client usually doesn't
 
@@ -80,10 +82,10 @@ so the error says the write may have landed. `--help` lists every command.
 | **A training summary** | Volume, working sets and a muscle-group split, joined against the exercise catalogue. Warmup sets excluded, which otherwise inflates volume by roughly a fifth. `--unit lb` converts and renames every key, because the API answers in kilograms whatever the account displays |
 | **Claims that re-run** | `verify_live.py` re-checks every read-only claim against a real account, and a weekly CI job re-applies every spec correction to whatever Hevy is serving |
 
-The upstream spec declares no server and no security scheme, so a generated
-client knows neither where to send a request nor how to authenticate. One
-command re-pins Hevy's document from the Swagger UI bundle and re-applies all 19
-corrections from [spec-patches.json](skills/hevy-api/spec-patches.json):
+Upstream declares its server and security schemes itself since 2026-11-18,
+which retired four corrections. One command re-pins Hevy's document from
+`developers.hevy.com/openapi.json` and re-applies the remaining 15 from
+[spec-patches.json](skills/hevy-api/spec-patches.json):
 
 ```bash
 python3 scripts/build_corrected_spec.py --fetch
@@ -144,7 +146,7 @@ API calls. The suggestion stops once the mirror is on.
 | Path | What it holds |
 | ---- | ------------- |
 | `skills/hevy-api/SKILL.md` | auth, the endpoint index, pagination, errors, the gotchas |
-| `skills/hevy-api/reference/` | one file per resource, plus `observed.md` and `recipes.md` |
+| `skills/hevy-api/reference/` | one file per resource, plus `auth.md`, `observed.md` and `recipes.md` |
 | `skills/hevy-api/scripts/hevy.py` | the client, standard library only |
 | `skills/hevy-api/scripts/verify_live.py` | re-checks every observed claim against a real account |
 | `skills/hevy-api/openapi.json` | the pinned upstream spec, kept unedited for comparison |
@@ -160,17 +162,17 @@ omits them, so installing the API skill does not drag them along.
 
 ## What it does not cover
 
-- **Deleting anything.** No delete route for any resource, confirmed by the
-  server's own `Allow` headers.
-- **Other people's data.** A key reaches one account. No OAuth, no user
-  scoping.
-- **Anything outside `/v1`.** No webhooks, no streaming, no bulk import.
+- **Deleting training data.** No route does it, confirmed by the server's own
+  `Allow` headers.
+- **Running an OAuth app.** The flow, scopes and webhooks are documented from
+  Hevy's guide, untested. The client speaks the personal key only.
+- **Anything outside `/v1`.** No streaming, no bulk import.
 - **Per-exercise unit overrides.** User info reports account weight and
   distance preferences, plus `is_pro`. Training values remain metric, and
   `summary` uses kilograms unless you pass `--unit lb`.
 
-Hevy's documentation says the API may change shape or be withdrawn, so pin the
-behaviour you depend on with tests.
+The API changes without notice: two behaviours changed between 2026-10-27 and
+2026-11-18 under an unchanged version. Pin what you depend on with tests.
 
 ## Checks
 
@@ -200,8 +202,8 @@ invalid key, so write behaviour was verified once by hand
 ([observed.md](skills/hevy-api/reference/observed.md)). A failure names the
 claim it broke.
 
-The 2026-10-27 refresh checked reads without creating or changing training
-data. Routine writes now document an object where earlier writes returned an
+The 2026-11-18 refresh checked reads without creating or changing training
+data. Routine writes document an object where the last live writes returned an
 array, so the corrected spec accepts both until an authorised write resolves it.
 
 Conventions for editing the skills: [AGENTS.md](AGENTS.md). Getting a change
@@ -213,8 +215,8 @@ MIT, in [LICENSE](LICENSE), covering the skills, documentation, client and
 checks alike, so a copied skill carries one licence rather than two.
 
 **Two files are not mine to license.** `openapi.json` is Hevy's own OpenAPI
-document, extracted from the Swagger UI bundle and re-serialised, content
-unchanged, so the corrections have a fixed reference.
+document, downloaded from `developers.hevy.com/openapi.json` and re-serialised,
+content unchanged, so the corrections have a fixed reference.
 `openapi.corrected.json` is generated from it. Copyright belongs to Hevy, who
 attach no licence to it. The MIT grant reaches neither them nor the Hevy name.
 

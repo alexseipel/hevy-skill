@@ -105,8 +105,10 @@ Rows carry no set index, so group by `workout_id` and keep the returned order.
 ## Keeping a local copy in step
 
 1. Store the timestamp before the run starts.
-2. Page `/v1/workouts/events?since=<last watermark>` to the end.
-3. Upsert on `type: "updated"`, delete on `type: "deleted"`.
+2. Page `/v1/workouts/events?since=<last watermark>` until `page` reaches
+   `page_count`.
+3. Upsert `event.workout` on `type: "updated"`, delete `event.id` on
+   `type: "deleted"`.
 4. Save the stored timestamp as the new watermark.
 
 Taking the timestamp first stops a workout written mid-run from being missed.

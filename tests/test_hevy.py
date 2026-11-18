@@ -57,10 +57,12 @@ class FakeApi:
     def __init__(self):
         self.pages: dict[str, dict[int, dict]] = {}
         self.calls: list[tuple[str, str, dict]] = []
+        self.uploads: list[tuple[bytes, str] | None] = []
 
-    def request(self, method, path, params=None, body=None, retries=3):
+    def request(self, method, path, params=None, body=None, retries=3, upload=None):
         params = params or {}
         self.calls.append((method, path, dict(params)))
+        self.uploads.append(upload)
         return self.pages[path][params.get("page", 1)]
 
     def calls_to(self, path) -> list[dict]:
@@ -115,13 +117,58 @@ class ClientTest(unittest.TestCase):
         argvs = [["create-workout", "-"], ["update-workout", "W1", "-"],
                  ["create-routine", "-"], ["update-routine", "R1", "-"],
                  ["create-folder", "Legs"], ["create-template", "-"],
-                 ["create-measurement", "-"], ["update-measurement", "2024-01-01", "-"]]
+                 ["create-measurement", "-"], ["update-measurement", "2024-01-01", "-"],
+                 ["add-workout-image", "W1", "photo.jpg"],
+                 ["set-measurement-image", "2024-01-01", "photo.jpg"]]
         parser = hevy.build_parser()
         for argv in argvs:
             with self.subTest(command=argv[0]):
                 with self.assertRaises(SystemExit):
                     hevy.run(parser.parse_args(argv))
         self.assertEqual(self.api.calls, [], "a refused write must not reach the API")
+
+    def test_image_commands_send_the_file_raw_under_its_own_content_type(self):
+        """Both image routes take the bytes as the body, not JSON or multipart."""
+        photo = pathlib.Path(self.tmp.name) / "Progress.PNG"
+        photo.write_bytes(b"\x89PNG fake")
+        self.api.pages["/v1/workouts/W1/images"] = {1: {"id": "W1", "media": []}}
+        self.api.pages["/v1/body_measurements/2024-01-01/image"] = {1: {"date": "2024-01-01"}}
+        parser = hevy.build_parser()
+        hevy.run(parser.parse_args(["add-workout-image", "W1", str(photo), "--yes"]))
+        hevy.run(parser.parse_args(["set-measurement-image", "2024-01-01", str(photo), "--yes"]))
+        self.assertEqual([(m, p) for m, p, _ in self.api.calls],
+                         [("POST", "/v1/workouts/W1/images"),
+                          ("PUT", "/v1/body_measurements/2024-01-01/image")])
+        self.assertEqual(self.api.uploads, [(b"\x89PNG fake", "image/png")] * 2)
+
+    def test_an_image_of_an_unsupported_type_is_refused_before_any_call(self):
+        gif = pathlib.Path(self.tmp.name) / "photo.gif"
+        gif.write_bytes(b"GIF89a")
+        parser = hevy.build_parser()
+        with self.assertRaises(SystemExit) as refused:
+            hevy.run(parser.parse_args(["add-workout-image", "W1", str(gif), "--yes"]))
+        self.assertIn(".webp", str(refused.exception))
+        self.assertEqual(self.api.calls, [])
+
+    def test_request_sends_an_upload_as_the_raw_body(self):
+        class FakeResp(io.BytesIO):
+            status = 201
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+
+        os.environ["HEVY_API_KEY"] = "test-key"
+        self.addCleanup(os.environ.pop, "HEVY_API_KEY", None)
+        sent = []
+
+        def urlopen(req, timeout=None):
+            sent.append((req.get_method(), req.data, req.get_header("Content-type")))
+            return FakeResp(b'{"id": "W1"}')
+
+        with mock.patch.object(hevy.urllib.request, "urlopen", urlopen):
+            body = self.saved["request"]("POST", "/v1/workouts/W1/images",
+                                         upload=(b"raw bytes", "image/webp"))
+        self.assertEqual(sent, [("POST", b"raw bytes", "image/webp")])
+        self.assertEqual(body, {"id": "W1"})
 
     def test_notify_prints_unless_quiet_is_truthy(self):
         for value, expected in (("1", ""), ("0", "[hevy] ping\n"), ("", "[hevy] ping\n")):
@@ -162,7 +209,7 @@ class ClientTest(unittest.TestCase):
         return urlopen
 
     def test_request_retries_reads_but_not_writes_on_5xx(self):
-        """A re-sent write can duplicate, and the API has no delete route."""
+        """A re-sent write can duplicate, and the API cannot delete the copy."""
         real_request = self.saved["request"]
         os.environ["HEVY_API_KEY"] = "test-key"
         self.addCleanup(os.environ.pop, "HEVY_API_KEY", None)
@@ -194,9 +241,11 @@ class ClientTest(unittest.TestCase):
         with mock.patch.object(hevy.urllib.request, "urlopen",
                                self.failing_urlopen(429, attempts)), \
              mock.patch.object(hevy.time, "sleep"):
-            with self.assertRaises(hevy.HevyError):
+            with self.assertRaises(hevy.HevyError) as failed:
                 real_request("POST", "/v1/workouts", body={}, retries=2)
         self.assertEqual(len(attempts), 3)
+        self.assertIn("Wait for the window to pass", str(failed.exception))
+        self.assertNotIn("may still have been applied", str(failed.exception))
 
     # ------------------------------------------------------------- pagination
 

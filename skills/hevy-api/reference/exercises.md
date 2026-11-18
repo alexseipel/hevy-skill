@@ -9,7 +9,6 @@ The catalogue: Hevy's built-in exercises plus the account's custom ones.
 
 | Parameter  | In     | Default | Notes                            |
 | ---------- | ------ | ------- | -------------------------------- |
-| `api-key`  | header | —       | required                         |
 | `page`     | query  | 1       | 1 or greater                     |
 | `pageSize` | query  | 100     | maximum 100, the highest cap here |
 
@@ -81,9 +80,10 @@ message: `{"error": {"issues": [...]}}`. This route also validates the body
 before it checks the key, so a `400` does not mean the key was accepted
 ([observed.md](observed.md#18-an-invalid-template-body-answers-with-an-error-object)).
 
-`403` returns `{"error": "exceeds-custom-exercise-limit"}`, a free-plan limit
-of 7 custom exercises that an active Pro key cannot reach
-([observed.md](observed.md#the-403-limits-are-free-plan-limits)).
+`403` returns `{"error": "exceeds-custom-exercise-limit", "message": "…"}`,
+which the spec describes as a free-account limit of 7 custom exercises. An
+active Pro account cannot reach it
+([observed.md](observed.md#the-403-limits-are-free-account-limits)).
 
 **`exercise_type` decides which set fields carry meaning.** A `duration`
 exercise ignores `weight_kg` and `reps`, and a `distance_duration` exercise
@@ -99,7 +99,7 @@ curl -s "https://api.hevyapp.com/v1/exercise_templates/D04AC939" \
 
 Returns a bare `ExerciseTemplate`. `404` if the id is unknown, sent as the bare
 text `Exercise template not found` rather than JSON
-([observed.md](observed.md#17-a-404-body-is-plain-text-on-half-the-routes)).
+([observed.md](observed.md#17-a-404-body-is-plain-text-on-three-routes)).
 
 ## GET /v1/exercise_history/{exerciseTemplateId}
 
@@ -108,7 +108,6 @@ repeated on each row.
 
 | Parameter    | In     | Notes                                       |
 | ------------ | ------ | ------------------------------------------- |
-| `api-key`    | header | required                                    |
 | `start_date` | query  | optional, ISO 8601, filters from this date  |
 | `end_date`   | query  | optional, ISO 8601, filters up to this date |
 

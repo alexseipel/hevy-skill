@@ -4,10 +4,6 @@ One route, and the only one that says anything about the account itself.
 
 ## GET /v1/user/info
 
-| Parameter | In     | Notes    |
-| --------- | ------ | -------- |
-| `api-key` | header | required |
-
 ```bash
 curl -s "https://api.hevyapp.com/v1/user/info" -H "api-key: $HEVY_API_KEY"
 ```
@@ -34,9 +30,10 @@ The result is wrapped in `data`, which no other route does.
 | `is_pro` | boolean | whether the account has an active Hevy Pro subscription |
 
 These fields are documented in the current [UserInfo schema](../openapi.json)
-and were checked live on 2026-10-27 with `scripts/verify_live.py`.
+and were checked live on 2026-11-18 with `scripts/verify_live.py`.
 
-`404` is the documented failure, and a wrong key gives `401` before that.
+`404` is the documented failure, and a wrong credential gives `401` before
+that. An OAuth app needs the `read-profile` scope here ([auth.md](auth.md#scopes)).
 
 **Use it as the key check.** It takes no parameters and touches no training
 data, which makes it the cheapest way to prove a key works before an import.

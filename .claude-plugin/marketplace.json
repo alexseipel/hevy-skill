@@ -6,13 +6,13 @@
   },
   "metadata": {
     "description": "Agent skill for the Hevy training API",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "plugins": [
     {
       "name": "hevy",
       "description": "Full coverage of the Hevy REST API: workouts, routines, routine folders, exercise templates, exercise history, body measurements and user info, verified against the live API.",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "author": {
         "name": "Alexander Seipel",
         "url": "https://github.com/alexseipel"

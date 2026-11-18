@@ -86,9 +86,22 @@ unrecognized keys ([observed.md](observed.md#write-behaviour)).
 | `updated_at`  | string     | ISO 8601                                    |
 | `created_at`  | string     | ISO 8601                                    |
 | `exercises`   | Exercise[] |                                             |
+| `media`       | WorkoutMedia[] | images and videos, in display order     |
 
 `is_private` can be sent when creating a workout, and the response schema does
 not list it, so do not expect to read it back.
+
+### WorkoutMedia
+
+| Field           | Type   | Notes                                    |
+| --------------- | ------ | ---------------------------------------- |
+| `type`          | string | `image` or `video`, required             |
+| `url`           | string | the image or video, required             |
+| `thumbnail_url` | string | videos only                              |
+
+`media` joined the spec on 2026-11-18 and was an empty array on every workout
+read that day. No write schema carries it: images arrive through
+[their own route](workouts.md#post-v1workoutsworkoutidimages).
 
 ## Routine
 
@@ -159,6 +172,11 @@ A response also carries **`id`** and **`created_at`**, which the spec omits, and
 it **leaves out any field that was never recorded** rather than sending `null`.
 Strip `id` and `created_at` before writing the entry back.
 
+`picture_url`, a nullable read-only string, joined the spec on 2026-11-18. It
+is set through
+[the image route](measurements.md#put-v1body_measurementsdateimage), never
+through a measurement write.
+
 `weight_kg`, `lean_mass_kg`, `fat_percent`, `neck_cm`, `shoulder_cm`,
 `chest_cm`, `left_bicep_cm`, `right_bicep_cm`, `left_forearm_cm`,
 `right_forearm_cm`, `abdomen`, `waist`, `hips`, `left_thigh`, `right_thigh`,
@@ -192,8 +210,8 @@ event is one of two shapes, told apart by `type`:
 `type` and `workout` are required on an update. `type` and `id` are required on
 a delete, and `deleted_at` is not, though the one deletion observed on
 2026-08-23 carried all three. When the feed has nothing to report, `events` is
-absent and an empty `workouts` array takes its place
-([observed.md](observed.md#14-an-empty-events-feed-answers-with-the-wrong-key)).
+an empty array
+([observed.md](observed.md#14-an-empty-events-feed-answered-with-the-wrong-key)).
 
 ## Enums
 

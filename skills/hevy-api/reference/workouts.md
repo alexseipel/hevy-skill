@@ -1,6 +1,6 @@
 # Workouts
 
-Six routes. Field-level detail for `Workout`, `Exercise` and `Set` is in
+Seven routes. Field-level detail for `Workout`, `Exercise` and `Set` is in
 [objects.md](objects.md).
 
 ## GET /v1/workouts
@@ -9,7 +9,6 @@ A page of complete workouts, each with its exercises and sets.
 
 | Parameter  | In     | Default | Notes                    |
 | ---------- | ------ | ------- | ------------------------ |
-| `api-key`  | header | —       | required                 |
 | `page`     | query  | 1       | 1 or greater             |
 | `pageSize` | query  | 10      | maximum 10 |
 
@@ -23,7 +22,8 @@ curl -s "https://api.hevyapp.com/v1/workouts?page=1&pageSize=10" \
 ```
 
 `400` means `pageSize` was over 10 or `page` was negative. `page=0` returns
-page 1.
+page 1, and a page past the last returns `200` with an empty array
+([observed.md](observed.md#5-and-6-page-bounds)).
 
 ## POST /v1/workouts
 
@@ -83,7 +83,6 @@ The incremental feed. Events run newest first.
 
 | Parameter  | In     | Default                | Notes                        |
 | ---------- | ------ | ---------------------- | ---------------------------- |
-| `api-key`  | header | —                      | required                     |
 | `page`     | query  | 1                      | 1 or greater                 |
 | `pageSize` | query  | 10                     | maximum 10 |
 | `since`    | query  | —                      | ISO 8601. The spec's epoch default is wrong: omitting `since` returns no events ([observed.md](observed.md)) |
@@ -99,10 +98,10 @@ curl -s "https://api.hevyapp.com/v1/workouts/events?since=2024-08-01T00:00:00Z&p
   { "type": "deleted", "id": "efe6801c-…", "deleted_at": "2021-09-13T12:00:00Z" } ] }
 ```
 
-**Read the array as `payload.get("events", [])`.** With nothing to report the
-key is missing entirely, replaced by an empty `workouts` array
-([observed.md](observed.md#14-an-empty-events-feed-answers-with-the-wrong-key)).
-Indexing it directly throws exactly when a sync has caught up.
+With nothing to report, `events` is an empty array. Up to 2026-10-27 the key
+was missing instead, so `payload.get("events", [])` is the read that survived
+both
+([observed.md](observed.md#14-an-empty-events-feed-answered-with-the-wrong-key)).
 
 Branch on `type`: `updated` carries a full `workout` to upsert, `deleted`
 carries only an `id` to remove. This is the only route that reports deletions,
@@ -125,7 +124,7 @@ curl -s "https://api.hevyapp.com/v1/workouts/$WORKOUT_ID" -H "api-key: $HEVY_API
 Returns a bare `Workout`, not wrapped in a key. `404` if the id is unknown or
 belongs to another account, and **that `404` is the bare text `Workout not
 found` under `text/html`**, not JSON
-([observed.md](observed.md#17-a-404-body-is-plain-text-on-half-the-routes)).
+([observed.md](observed.md#17-a-404-body-is-plain-text-on-three-routes)).
 
 ## PUT /v1/workouts/{workoutId}
 
@@ -145,3 +144,38 @@ The response is wrapped the same way as the create response, so read the result
 from `body.workout[0]`.
 
 `400` returns `{"error": "…"}`.
+
+## POST /v1/workouts/{workoutId}/images
+
+Adds one image after the workout's existing media and returns `201` with the
+updated `Workout`. **The body is the raw image, not JSON and not multipart**,
+under a `Content-Type` of `image/jpeg`, `image/png` or `image/webp`.
+
+```bash
+curl -s -X POST "https://api.hevyapp.com/v1/workouts/$WORKOUT_ID/images" \
+  -H "api-key: $HEVY_API_KEY" -H "Content-Type: image/jpeg" \
+  --data-binary @photo.jpg
+```
+
+| Limit             | Value                                                    |
+| ----------------- | -------------------------------------------------------- |
+| media per workout | 3 images and videos in total                             |
+| file              | 10 MB and 50 megapixels                                  |
+| stored as         | JPEG, resized to fit 800 by 800 pixels                   |
+| uploads           | 100 per 24 hours for each account, across both image routes |
+
+| Status | Meaning                                              |
+| ------ | ---------------------------------------------------- |
+| 400    | not a valid image, or the workout already holds 3    |
+| 404    | no such workout                                      |
+| 413    | larger than 10 MB                                    |
+| 415    | a `Content-Type` outside the three                   |
+
+The image comes back in the workout's `media` array
+([objects.md](objects.md#workoutmedia)).
+
+**Everything above is the spec's word.** The route entered the spec on
+2026-11-18 and no upload was made. Observed that day: it allows `POST` only, so
+nothing removes an image, and it checks the key before the body.
+
+<!-- UNVERIFIED: whether PUT /v1/workouts/{workoutId}, which replaces the workout, keeps its media. -->
